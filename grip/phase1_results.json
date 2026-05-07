@@ -1,0 +1,74 @@
+[
+  {
+    "commanded_pulse": 200,
+    "actual_pulse": 205,
+    "theoretical_mm": 60.79,
+    "measured_mm": 55.0,
+    "error_mm": -5.79,
+    "temp_c": 39
+  },
+  {
+    "commanded_pulse": 260,
+    "actual_pulse": 253,
+    "theoretical_mm": 59.73,
+    "measured_mm": 50.0,
+    "error_mm": -9.73,
+    "temp_c": 41
+  },
+  {
+    "commanded_pulse": 320,
+    "actual_pulse": 314,
+    "theoretical_mm": 56.58,
+    "measured_mm": 45,
+    "error_mm": -52.08,
+    "temp_c": 41
+  },
+  {
+    "commanded_pulse": 380,
+    "actual_pulse": 371,
+    "theoretical_mm": 51.45,
+    "measured_mm": 38,
+    "error_mm": -47.65,
+    "temp_c": 42
+  },
+  {
+    "commanded_pulse": 440,
+    "actual_pulse": 434,
+    "theoretical_mm": 44.53,
+    "measured_mm": 30.0,
+    "error_mm": -14.53,
+    "temp_c": 43
+  },
+  {
+    "commanded_pulse": 500,
+    "actual_pulse": 494,
+    "theoretical_mm": 36.06,
+    "measured_mm": 20.0,
+    "error_mm": -16.06,
+    "temp_c": 44
+  },
+  {
+    "commanded_pulse": 560,
+    "actual_pulse": 552,
+    "theoretical_mm": 26.34,
+    "measured_mm": 10.0,
+    "error_mm": -16.34,
+    "temp_c": 44
+  },
+  {
+    "commanded_pulse": 620,
+    "actual_pulse": 607,
+    "theoretical_mm": 15.72,
+    "measured_mm": 0.0,
+    "error_mm": -15.72,
+    "temp_c": 45
+  },
+  {
+    "commanded_pulse": 680,
+    "actual_pulse": 656,
+    "theoretical_mm": 4.56,
+    "measured_mm": null,
+    "error_mm": null,
+    "temp_c": 46
+  }
+]

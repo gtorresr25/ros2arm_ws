@@ -1,0 +1,33 @@
+[
+  {
+    "timestamp": "2026-04-07T02:23:33",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 33.6,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "SECURE",
+    "stop_reason": "stall",
+    "grip_pulse": 413,
+    "temp_c": 46,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "unknown object gripped at jaw=33.6mm"
+    ]
+  },
+  {
+    "timestamp": "2026-04-07T02:24:45",
+    "mode": "estimated",
+    "estimate_source": "manual",
+    "estimated_width_mm": 30.0,
+    "actual_jaw_mm": 25.5,
+    "contact_offset_mm": -4.5,
+    "threshold": 40,
+    "outcome": "SECURE",
+    "stop_reason": "stall",
+    "grip_pulse": 467,
+    "temp_c": 47,
+    "notes": []
+  }
+]

@@ -1,0 +1,415 @@
+[
+  {
+    "object": "bigwoodsquare",
+    "object_width_mm": 38.0,
+    "threshold": 40,
+    "contacted": true,
+    "grip_pulse": 404,
+    "jaw_at_grip_mm": 34.8,
+    "lift": {
+      "lifted": true,
+      "slip_detected": false,
+      "max_drift": 2,
+      "readings": [
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        },
+        {
+          "actual": 406,
+          "drift": 2
+        }
+      ]
+    },
+    "grip_steps": [
+      {
+        "commanded": 355,
+        "actual": 345,
+        "error": 10,
+        "jaw_mm": 42.1,
+        "temp_c": 47
+      },
+      {
+        "commanded": 360,
+        "actual": 354,
+        "error": 6,
+        "jaw_mm": 41.0,
+        "temp_c": 47
+      },
+      {
+        "commanded": 365,
+        "actual": 354,
+        "error": 11,
+        "jaw_mm": 41.0,
+        "temp_c": 47
+      },
+      {
+        "commanded": 370,
+        "actual": 359,
+        "error": 11,
+        "jaw_mm": 40.5,
+        "temp_c": 47
+      },
+      {
+        "commanded": 375,
+        "actual": 368,
+        "error": 7,
+        "jaw_mm": 39.4,
+        "temp_c": 47
+      },
+      {
+        "commanded": 380,
+        "actual": 371,
+        "error": 9,
+        "jaw_mm": 39.0,
+        "temp_c": 47
+      },
+      {
+        "commanded": 385,
+        "actual": 377,
+        "error": 8,
+        "jaw_mm": 38.4,
+        "temp_c": 47
+      },
+      {
+        "commanded": 390,
+        "actual": 378,
+        "error": 12,
+        "jaw_mm": 38.2,
+        "temp_c": 47
+      },
+      {
+        "commanded": 395,
+        "actual": 384,
+        "error": 11,
+        "jaw_mm": 37.5,
+        "temp_c": 47
+      },
+      {
+        "commanded": 400,
+        "actual": 385,
+        "error": 15,
+        "jaw_mm": 37.3,
+        "temp_c": 47
+      },
+      {
+        "commanded": 405,
+        "actual": 390,
+        "error": 15,
+        "jaw_mm": 36.7,
+        "temp_c": 47
+      },
+      {
+        "commanded": 410,
+        "actual": 394,
+        "error": 16,
+        "jaw_mm": 36.1,
+        "temp_c": 46
+      },
+      {
+        "commanded": 415,
+        "actual": 395,
+        "error": 20,
+        "jaw_mm": 36.0,
+        "temp_c": 47
+      },
+      {
+        "commanded": 420,
+        "actual": 397,
+        "error": 23,
+        "jaw_mm": 35.7,
+        "temp_c": 47
+      },
+      {
+        "commanded": 425,
+        "actual": 398,
+        "error": 27,
+        "jaw_mm": 35.6,
+        "temp_c": 47
+      },
+      {
+        "commanded": 430,
+        "actual": 400,
+        "error": 30,
+        "jaw_mm": 35.3,
+        "temp_c": 47
+      },
+      {
+        "commanded": 435,
+        "actual": 401,
+        "error": 34,
+        "jaw_mm": 35.2,
+        "temp_c": 47
+      },
+      {
+        "commanded": 440,
+        "actual": 401,
+        "error": 39,
+        "jaw_mm": 35.2,
+        "temp_c": 47
+      },
+      {
+        "commanded": 445,
+        "actual": 404,
+        "error": 41,
+        "jaw_mm": 34.8,
+        "temp_c": 47
+      }
+    ]
+  },
+  {
+    "object": "calculator",
+    "object_width_mm": 19.0,
+    "threshold": 40,
+    "contacted": true,
+    "grip_pulse": 564,
+    "jaw_at_grip_mm": 9.3,
+    "lift": {
+      "lifted": true,
+      "slip_detected": false,
+      "max_drift": 1,
+      "readings": [
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 565,
+          "drift": 1
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        },
+        {
+          "actual": 566,
+          "drift": 2
+        }
+      ]
+    },
+    "grip_steps": [
+      {
+        "commanded": 481,
+        "actual": 472,
+        "error": 9,
+        "jaw_mm": 24.7,
+        "temp_c": 50
+      },
+      {
+        "commanded": 486,
+        "actual": 473,
+        "error": 13,
+        "jaw_mm": 24.5,
+        "temp_c": 51
+      },
+      {
+        "commanded": 491,
+        "actual": 482,
+        "error": 9,
+        "jaw_mm": 23.0,
+        "temp_c": 50
+      },
+      {
+        "commanded": 496,
+        "actual": 487,
+        "error": 9,
+        "jaw_mm": 22.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 501,
+        "actual": 489,
+        "error": 12,
+        "jaw_mm": 21.8,
+        "temp_c": 50
+      },
+      {
+        "commanded": 506,
+        "actual": 498,
+        "error": 8,
+        "jaw_mm": 20.3,
+        "temp_c": 50
+      },
+      {
+        "commanded": 511,
+        "actual": 499,
+        "error": 12,
+        "jaw_mm": 20.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 516,
+        "actual": 509,
+        "error": 7,
+        "jaw_mm": 18.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 521,
+        "actual": 511,
+        "error": 10,
+        "jaw_mm": 18.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 526,
+        "actual": 517,
+        "error": 9,
+        "jaw_mm": 17.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 531,
+        "actual": 521,
+        "error": 10,
+        "jaw_mm": 16.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 536,
+        "actual": 524,
+        "error": 12,
+        "jaw_mm": 16.0,
+        "temp_c": 50
+      },
+      {
+        "commanded": 541,
+        "actual": 531,
+        "error": 10,
+        "jaw_mm": 14.8,
+        "temp_c": 50
+      },
+      {
+        "commanded": 546,
+        "actual": 533,
+        "error": 13,
+        "jaw_mm": 14.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 551,
+        "actual": 541,
+        "error": 10,
+        "jaw_mm": 13.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 556,
+        "actual": 545,
+        "error": 11,
+        "jaw_mm": 12.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 561,
+        "actual": 548,
+        "error": 13,
+        "jaw_mm": 12.0,
+        "temp_c": 50
+      },
+      {
+        "commanded": 566,
+        "actual": 552,
+        "error": 14,
+        "jaw_mm": 11.3,
+        "temp_c": 50
+      },
+      {
+        "commanded": 571,
+        "actual": 553,
+        "error": 18,
+        "jaw_mm": 11.2,
+        "temp_c": 50
+      },
+      {
+        "commanded": 576,
+        "actual": 556,
+        "error": 20,
+        "jaw_mm": 10.7,
+        "temp_c": 50
+      },
+      {
+        "commanded": 581,
+        "actual": 557,
+        "error": 24,
+        "jaw_mm": 10.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 586,
+        "actual": 562,
+        "error": 24,
+        "jaw_mm": 9.7,
+        "temp_c": 50
+      },
+      {
+        "commanded": 591,
+        "actual": 562,
+        "error": 29,
+        "jaw_mm": 9.7,
+        "temp_c": 50
+      },
+      {
+        "commanded": 596,
+        "actual": 563,
+        "error": 33,
+        "jaw_mm": 9.5,
+        "temp_c": 50
+      },
+      {
+        "commanded": 601,
+        "actual": 564,
+        "error": 37,
+        "jaw_mm": 9.3,
+        "temp_c": 50
+      },
+      {
+        "commanded": 606,
+        "actual": 564,
+        "error": 42,
+        "jaw_mm": 9.3,
+        "temp_c": 50
+      }
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+ArmPi_Ultra_Resources/
+build/
+install/
+log/
+__pycache__/
+*.pyc
+*.egg-info/

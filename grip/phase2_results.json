@@ -1,0 +1,650 @@
+{
+  "stats": {
+    "noise_floor": 18,
+    "noise_mean": 12.9,
+    "contact_errors": {
+      "bottle": {
+        "width_mm": 35,
+        "contact_pulse": 532,
+        "contact_error": 24
+      },
+      "case": {
+        "width_mm": 28,
+        "contact_pulse": 502,
+        "contact_error": 24
+      },
+      "cylinder": {
+        "width_mm": 27,
+        "contact_pulse": 498,
+        "contact_error": 25
+      }
+    },
+    "current_threshold": 20,
+    "recommended_threshold": 20
+  },
+  "steps": [
+    {
+      "label": "empty",
+      "commanded": 210,
+      "actual": 208,
+      "error": 2,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 220,
+      "actual": 207,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 230,
+      "actual": 212,
+      "error": 18,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 240,
+      "actual": 224,
+      "error": 16,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 250,
+      "actual": 239,
+      "error": 11,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 260,
+      "actual": 246,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 270,
+      "actual": 256,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 280,
+      "actual": 267,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 290,
+      "actual": 278,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 300,
+      "actual": 286,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 310,
+      "actual": 297,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 320,
+      "actual": 305,
+      "error": 15,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 330,
+      "actual": 316,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 340,
+      "actual": 329,
+      "error": 11,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 350,
+      "actual": 337,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 360,
+      "actual": 344,
+      "error": 16,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 370,
+      "actual": 357,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 380,
+      "actual": 368,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 390,
+      "actual": 378,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 400,
+      "actual": 385,
+      "error": 15,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 410,
+      "actual": 397,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 420,
+      "actual": 409,
+      "error": 11,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 430,
+      "actual": 418,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 440,
+      "actual": 428,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 450,
+      "actual": 437,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 460,
+      "actual": 446,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 470,
+      "actual": 460,
+      "error": 10,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 480,
+      "actual": 467,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 490,
+      "actual": 480,
+      "error": 10,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 500,
+      "actual": 487,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 510,
+      "actual": 497,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 520,
+      "actual": 507,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 530,
+      "actual": 517,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 540,
+      "actual": 525,
+      "error": 15,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 550,
+      "actual": 538,
+      "error": 12,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 560,
+      "actual": 546,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 570,
+      "actual": 557,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 580,
+      "actual": 564,
+      "error": 16,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 590,
+      "actual": 576,
+      "error": 14,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 600,
+      "actual": 585,
+      "error": 15,
+      "temp_c": 42
+    },
+    {
+      "label": "empty",
+      "commanded": 610,
+      "actual": 597,
+      "error": 13,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 382,
+      "actual": 370,
+      "error": 12,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 392,
+      "actual": 378,
+      "error": 14,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 402,
+      "actual": 384,
+      "error": 18,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 412,
+      "actual": 397,
+      "error": 15,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 422,
+      "actual": 411,
+      "error": 11,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 432,
+      "actual": 418,
+      "error": 14,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 442,
+      "actual": 428,
+      "error": 14,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 452,
+      "actual": 439,
+      "error": 13,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 462,
+      "actual": 447,
+      "error": 15,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 472,
+      "actual": 461,
+      "error": 11,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 482,
+      "actual": 467,
+      "error": 15,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 492,
+      "actual": 479,
+      "error": 13,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 502,
+      "actual": 485,
+      "error": 17,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 512,
+      "actual": 492,
+      "error": 20,
+      "temp_c": 43
+    },
+    {
+      "label": "bottle",
+      "commanded": 522,
+      "actual": 501,
+      "error": 21,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 532,
+      "actual": 508,
+      "error": 24,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 542,
+      "actual": 517,
+      "error": 25,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 552,
+      "actual": 520,
+      "error": 32,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 562,
+      "actual": 524,
+      "error": 38,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 572,
+      "actual": 529,
+      "error": 43,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 582,
+      "actual": 534,
+      "error": 48,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 592,
+      "actual": 541,
+      "error": 51,
+      "temp_c": 42
+    },
+    {
+      "label": "bottle",
+      "commanded": 602,
+      "actual": 543,
+      "error": 59,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 432,
+      "actual": 418,
+      "error": 14,
+      "temp_c": 44
+    },
+    {
+      "label": "case",
+      "commanded": 442,
+      "actual": 428,
+      "error": 14,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 452,
+      "actual": 439,
+      "error": 13,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 462,
+      "actual": 447,
+      "error": 15,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 472,
+      "actual": 461,
+      "error": 11,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 482,
+      "actual": 467,
+      "error": 15,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 492,
+      "actual": 473,
+      "error": 19,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 502,
+      "actual": 478,
+      "error": 24,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 512,
+      "actual": 482,
+      "error": 30,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 522,
+      "actual": 484,
+      "error": 38,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 532,
+      "actual": 485,
+      "error": 47,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 542,
+      "actual": 488,
+      "error": 54,
+      "temp_c": 43
+    },
+    {
+      "label": "case",
+      "commanded": 552,
+      "actual": 488,
+      "error": 64,
+      "temp_c": 43
+    },
+    {
+      "label": "cylinder",
+      "commanded": 438,
+      "actual": 427,
+      "error": 11,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 448,
+      "actual": 434,
+      "error": 14,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 458,
+      "actual": 442,
+      "error": 16,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 468,
+      "actual": 453,
+      "error": 15,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 478,
+      "actual": 464,
+      "error": 14,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 488,
+      "actual": 468,
+      "error": 20,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 498,
+      "actual": 473,
+      "error": 25,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 508,
+      "actual": 477,
+      "error": 31,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 518,
+      "actual": 480,
+      "error": 38,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 528,
+      "actual": 482,
+      "error": 46,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 538,
+      "actual": 482,
+      "error": 56,
+      "temp_c": 44
+    },
+    {
+      "label": "cylinder",
+      "commanded": 548,
+      "actual": 484,
+      "error": 64,
+      "temp_c": 44
+    }
+  ]
+}
