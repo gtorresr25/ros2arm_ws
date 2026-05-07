@@ -27,11 +27,12 @@ import message_filters
 
 # --- tunable parameters ---------------------------------------------------
 MAX_HEIGHT_M  = 0.100   # 100 mm above floor = candidate zone
-MIN_HEIGHT_M  = 0.0025   # 100 mm above floor = candidate zone
+MIN_HEIGHT_M  = 0.003   # 100 mm above floor = candidate zone
 SUBSAMPLE     = 16      # use every Nth pixel for plane fitting
 PLANE_AVG_N   = 5      # number of frames to average the floor plane over
 DILATE_PX        = 20   # pixels to expand the candidate mask outward
-MIN_CONTOUR_AREA = 500  # px² — blobs smaller than this are ignored
+MIN_CONTOUR_AREA = 200  # px² — blobs smaller than this are ignored
+GRAD_THRESHOLD_M  = 0.05  # m — row-to-row depth jump that signals wall/background
 # --------------------------------------------------------------------------
 
 SENSOR_QOS = QoSProfile(
@@ -137,8 +138,28 @@ class FloorFilter(Node):
         ray_x = self._ray_x
         ray_y = self._ray_y
 
+        # --- depth gradient filter: find floor rows, exclude wall/bg ---------
+        Z_masked = np.where(valid, Z, np.nan)
+        with np.errstate(all='ignore'):
+            row_median = np.nanmedian(Z_masked, axis=1)   # (H,)
+
+        # Row-to-row gradient — find last big jump scanning from bottom up
+        grad = np.abs(np.diff(row_median))
+        floor_start_row = 0   # default: use all rows
+        for i in range(len(grad) - 1, 0, -1):
+            if np.isfinite(grad[i]) and grad[i] > GRAD_THRESHOLD_M:
+                floor_start_row = i + 1
+                break
+
+        self._floor_start_row = floor_start_row   # store for plot
+
+        # Build row mask — only rows at or below the detected floor start
+        row_mask = np.zeros(h, dtype=bool)
+        row_mask[floor_start_row:] = True
+        fit_mask = valid & row_mask[:, np.newaxis]
+
         # --- subsample for plane fitting ----------------------------------
-        mask_sub = valid[::SUBSAMPLE, ::SUBSAMPLE]
+        mask_sub = fit_mask[::SUBSAMPLE, ::SUBSAMPLE]
         Zs = Z[::SUBSAMPLE, ::SUBSAMPLE][mask_sub]
         Xs = ray_x[::SUBSAMPLE, ::SUBSAMPLE][mask_sub] * Zs
         Ys = ray_y[::SUBSAMPLE, ::SUBSAMPLE][mask_sub] * Zs
@@ -192,6 +213,17 @@ class FloorFilter(Node):
 
         result = cv2.addWeighted(rgb, 0.5, overlay, 0.5, 0)
 
+        # --- draw sample grid dots ----------------------------------------
+        # yellow = used in plane fit,  red = valid depth but excluded (wall)
+        rows_s = np.arange(0, h, SUBSAMPLE)
+        cols_s = np.arange(0, w, SUBSAMPLE)
+        for r in rows_s:
+            for c in cols_s:
+                if fit_mask[r, c]:
+                    cv2.circle(result, (c, r), 2, (0, 220, 220), -1)   # yellow
+                elif valid[r, c]:
+                    cv2.circle(result, (c, r), 2, (0, 0, 180), -1)     # red
+
         # --- annotate -----------------------------------------------------
         cv2.putText(result,
                     f'floor normal: {normal.round(2)}  d={d:.3f}',
@@ -200,10 +232,112 @@ class FloorFilter(Node):
                     f'candidates: {candidate_dilated.sum()}  FPS: {self._fps:.1f}',
                     (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 0), 2)
 
+        # --- colorised depth image ----------------------------------------
+        depth_vis = np.zeros_like(Z, dtype=np.uint8)
+        valid_z = Z[valid]
+        if len(valid_z) > 0:
+            z_min, z_max = float(valid_z.min()), float(valid_z.max())
+            if z_max > z_min:
+                depth_norm = np.where(valid, (Z - z_min) / (z_max - z_min), 0.0)
+                depth_vis = (depth_norm * 255).astype(np.uint8)
+        depth_color = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
+        depth_color[~valid] = 0   # black for invalid pixels
+
         cv2.imshow('floor filter', result)
+        cv2.imshow('depth image', depth_color)
+        cv2.imshow('depth profile', self._draw_depth_profile(
+            Z, valid, normal, d, getattr(self, '_floor_start_row', 0)))
         if cv2.waitKey(1) & 0xFF == ord('q'):
             self.get_logger().info('Quit requested')
             rclpy.shutdown()
+
+    def _draw_depth_profile(self, Z: np.ndarray, valid: np.ndarray,
+                             normal: np.ndarray, d: float,
+                             floor_start_row: int = 0):
+        """
+        Draw a side-view depth profile plot:
+          X axis — image row (0 = top, H = bottom)
+          Y axis — median depth across all valid columns at that row (metres)
+        Overlays the plane-predicted depth as a red line and a green vertical
+        line marking where the gradient filter cut off the wall/background.
+        """
+        PLOT_W, PLOT_H = 600, 400
+        MARGIN = 40
+
+        h = Z.shape[0]
+
+        # Median depth per row (ignore invalid pixels)
+        Z_masked = np.where(valid, Z, np.nan)
+        with np.errstate(all='ignore'):
+            row_depth = np.nanmedian(Z_masked, axis=1)   # (H,)
+
+        # Plane-predicted depth per row — at image centre column (ray_x = 0)
+        rows = np.arange(h, dtype=np.float32)
+        ray_y_centre = (rows - (self._cy or h / 2.0)) / (self._fy or 600.0)
+        # plane: nx*ray_x*Z + ny*ray_y*Z + nz*Z = d  →  Z = d / (nx*0 + ny*ray_y + nz)
+        denom = normal[1] * ray_y_centre + normal[2]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            plane_depth = np.where(np.abs(denom) > 1e-6, d / denom, np.nan)
+
+        # Depth range for scaling
+        valid_depths = row_depth[np.isfinite(row_depth)]
+        if len(valid_depths) == 0:
+            return np.zeros((PLOT_H, PLOT_W, 3), dtype=np.uint8)
+        d_min = max(0.0, float(np.nanmin(valid_depths)) - 0.1)
+        d_max = float(np.nanmax(valid_depths)) + 0.1
+
+        plot = np.ones((PLOT_H, PLOT_W, 3), dtype=np.uint8) * 30   # dark bg
+
+        def to_px(row_i, depth_val):
+            px = int(MARGIN + (row_i / h) * (PLOT_W - 2 * MARGIN))
+            py = int(MARGIN + (1.0 - (depth_val - d_min) / (d_max - d_min))
+                     * (PLOT_H - 2 * MARGIN))
+            return px, py
+
+        # Draw grid lines
+        for depth_tick in np.linspace(d_min, d_max, 5):
+            _, py = to_px(0, depth_tick)
+            cv2.line(plot, (MARGIN, py), (PLOT_W - MARGIN, py), (60, 60, 60), 1)
+            cv2.putText(plot, f'{depth_tick:.2f}m', (2, py + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (120, 120, 120), 1)
+
+        # Draw measured depth (white)
+        prev = None
+        for i, dep in enumerate(row_depth):
+            if not np.isfinite(dep):
+                prev = None
+                continue
+            pt = to_px(i, dep)
+            if prev:
+                cv2.line(plot, prev, pt, (200, 200, 200), 1)
+            prev = pt
+
+        # Draw plane-predicted depth (red)
+        prev = None
+        for i, dep in enumerate(plane_depth):
+            if not np.isfinite(dep) or dep < 0:
+                prev = None
+                continue
+            pt = to_px(i, dep)
+            if prev:
+                cv2.line(plot, prev, pt, (60, 60, 220), 1)
+            prev = pt
+
+        # Draw gradient cutoff line (green vertical)
+        if floor_start_row > 0:
+            cut_px, _ = to_px(floor_start_row, d_min)
+            cv2.line(plot, (cut_px, MARGIN), (cut_px, PLOT_H - MARGIN),
+                     (0, 200, 0), 1)
+            cv2.putText(plot, f'row {floor_start_row}', (cut_px + 3, MARGIN + 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 200, 0), 1)
+
+        # Labels
+        cv2.putText(plot,
+                    'white=measured  blue=plane fit  green=wall cutoff',
+                    (MARGIN, PLOT_H - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4, (160, 160, 160), 1)
+
+        return plot
 
 
 def main():
