@@ -1,0 +1,244 @@
+<?xml version="1.0"?>
+<robot name="armpi_ultra">
+
+  <!-- ── BASE LINK ──────────────────────────────────────────────────────────
+       Cylinder: radius=60mm, height=95mm.
+       URDF cylinder origin is at geometric center, so visual offset = h/2.
+       Bottom of cylinder sits at world z=0. -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.0475" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.060" length="0.095"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.3 0.3 0.3 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── JOINT 1 ────────────────────────────────────────────────────────────
+       Base rotation — servo 6.
+       Sits on top of base cylinder (z=0.095).
+       Rotates around Z axis. Limits: ±120° = ±2.094 rad. -->
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+    <origin xyz="0 0 0.095" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.094" upper="2.094" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- ── LINK 1 ─────────────────────────────────────────────────────────────
+       Zero-length connector between joint1 (Z) and joint2 (Y).
+       Both joints share the same position at the top of the base cylinder. -->
+  <link name="link1"/>
+
+  <!-- ── JOINT 2 ────────────────────────────────────────────────────────────
+       Y rotation — same position as joint1 (top of base cylinder).
+       Limits: ±90° = ±1.571 rad. -->
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-1.571" upper="1.571" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- ── LINK 2 ─────────────────────────────────────────────────────────────
+       Arm column that rotates with the base.
+       Box: x=30mm (fore-aft thickness), y=55mm (width), z=100mm (height).
+       Visual origin at box center (z=50mm above joint2). -->
+  <link name="link2">
+    <visual>
+      <origin xyz="0 0 0.050" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.030 0.055 0.100"/>
+      </geometry>
+      <material name="blue_grey">
+        <color rgba="0.5 0.6 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── JOINT 3 ────────────────────────────────────────────────────────────
+       Shoulder — servo 5.
+       Sits at the top of link2 (z=0.100 in link2 frame).
+       Rotates around -Y axis. Limits: ±90° = ±1.571 rad. -->
+  <joint name="joint3" type="revolute">
+    <parent link="link2"/>
+    <child link="link3"/>
+    <origin xyz="0 0 0.100" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.571" upper="1.571" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- ── LINK 3 ─────────────────────────────────────────────────────────────
+       Upper arm from shoulder to elbow.
+       Box: x=22mm (thickness), y=40mm (width), z=95mm (length along arm).
+       Visual origin at box center (z=47.5mm above joint3). -->
+  <link name="link3">
+    <visual>
+      <origin xyz="0 0 0.0475" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.022 0.040 0.095"/>
+      </geometry>
+      <material name="light_grey">
+        <color rgba="0.7 0.7 0.7 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── JOINT 4 ────────────────────────────────────────────────────────────
+       Elbow — servo 4.
+       Sits at the top of link3 (z=0.095 in link3 frame).
+       Rotates around +Y axis (opposite to joint3). Limits: ±120° = ±2.094 rad. -->
+  <joint name="joint4" type="revolute">
+    <parent link="link3"/>
+    <child link="link4"/>
+    <origin xyz="0 0 0.095" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-2.094" upper="2.094" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- ── LINK 4 ─────────────────────────────────────────────────────────────
+       Forearm from elbow to wrist.
+       Box: x=35mm (thickness), y=40mm (width), z=50mm (length along arm).
+       Visual origin at box center (z=25mm above joint4). -->
+  <link name="link4">
+    <visual>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.035 0.040 0.050"/>
+      </geometry>
+      <material name="dark_red">
+        <color rgba="0.6 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── CAMERA JOINT ─────────────────────────────────────────────────────
+       Camera fixed to link4. Joint origin placed at camera center so the
+       camera link has its own TF coordinate frame in RViz.
+       x=-40mm (20mm from link4 -X face + extra 20mm), z=40mm (top flush
+       with link4 tip at z=50mm). -->
+  <joint name="camera_joint" type="fixed">
+    <parent link="link4"/>
+    <child link="camera"/>
+    <origin xyz="-0.040 0 0.040" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ── CAMERA ────────────────────────────────────────────────────────────
+       Box: x=18mm (depth in -X), y=74mm (width), z=20mm (length).
+       Visual origin at (0,0,0) — joint IS the camera center frame. -->
+  <link name="camera">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.018 0.074 0.020"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.05 0.05 0.05 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── JOINT 5 ────────────────────────────────────────────────────────────
+       Wrist pitch — servo 3.
+       Sits at the top of link4 (z=0.050 in link4 frame).
+       Rotates around +Z axis. Limits: ±90° = ±1.571 rad. -->
+  <joint name="wrist" type="revolute">
+    <parent link="link4"/>
+    <child link="link5"/>
+    <origin xyz="0 0 0.050" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.571" upper="1.571" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- ── LINK 5 ─────────────────────────────────────────────────────────────
+       Gripper palm — thin plate from which the two fingers branch.
+       Box: x=15mm, y=50mm, z=5mm. -->
+  <link name="link5">
+    <visual>
+      <origin xyz="0 0 0.0025" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.050 0.005"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.3 0.3 0.3 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── ADAMS APPLE JOINT ────────────────────────────────────────────────
+       Servo housing bump — fixed to link5, on the +X face. -->
+  <joint name="adams_apple_joint" type="fixed">
+    <parent link="link5"/>
+    <child link="adams_apple"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ── ADAMS APPLE ───────────────────────────────────────────────────────
+       Box: x=40mm (depth out from link5), y=40mm (width), z=20mm (height).
+       Center at x=27.5mm (+x face of link5 at 7.5mm + half of 40mm = 27.5mm). -->
+  <link name="adams_apple">
+    <visual>
+      <origin xyz="0.0275 0 0.0025" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.040 0.040 0.020"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.3 0.3 0.3 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── FIXED FINGER JOINT ───────────────────────────────────────────────
+       Rigid finger — fixed to link5, centered in Y. -->
+  <joint name="fixed_finger_joint" type="fixed">
+    <parent link="link5"/>
+    <child link="fixed_finger"/>
+    <origin xyz="0 0 0.005" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ── FIXED FINGER ──────────────────────────────────────────────────────
+       Box: x=7.5mm, y=10mm, z=90mm. Centered in Y. -->
+  <link name="fixed_finger">
+    <visual>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0075 0.010 0.090"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="0.9 0.9 0.2 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ── GRIPPER JOINT ─────────────────────────────────────────────────────
+       Rotating finger — revolute around +X axis.
+       +X rotation closes the gripper.
+       Limits: 0 to 45° = 0 to 0.785 rad. -->
+  <joint name="gripper_joint" type="revolute">
+    <parent link="link5"/>
+    <child link="gripper_finger"/>
+    <origin xyz="0 0 0.005" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0.0" upper="0.785" effort="100" velocity="1"/>
+  </joint>
+
+  <!-- ── GRIPPER FINGER ────────────────────────────────────────────────────
+       Box: x=7.5mm, y=10mm, z=90mm. Centered in Y. Rotates to close. -->
+  <link name="gripper_finger">
+    <visual>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0075 0.010 0.090"/>
+      </geometry>
+      <material name="orange">
+        <color rgba="0.9 0.5 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+</robot>

@@ -245,6 +245,180 @@ python3 scripts/floor_filter.py
 
 ---
 
+## Keyboard Teleop
+
+**Status: script written, kinematics package not yet built — not runnable yet.**
+
+End-effector teleoperation via keyboard.  Requires the `kinematics` ROS2 package
+(see below) and `ikpy` to be installed before it can run.
+
+### File
+| File | Purpose |
+|---|---|
+| `scripts/keyboard_teleop.py` | Standalone keyboard teleop — no ROS stack required at runtime |
+
+### Controls
+| Key | Action |
+|---|---|
+| `W` / `S` | Z up / down |
+| `Q` / `E` | Base rotate left / right (rotates [x,y] vector, keeps reach) |
+| `↑` / `↓` | Reach forward / backward (X axis) |
+| `←` / `→` | Wrist pitch tilt −/+ |
+| `Z` / `X` | Gripper open / close |
+| `C` | Toggle torque engage / release |
+| `H` | Return to home position |
+| `1`–`9` | Step size multiplier (1 = 1 mm / 2°, 9 = 9 mm / 18°) |
+| `P` | Print current position |
+| `Esc` / `Ctrl-C` | Quit |
+
+### Run (once kinematics package is built)
+```bash
+pip install --user ikpy
+source /opt/ros/jazzy/setup.bash
+source ~/ros2arm_ws/install/setup.bash
+python3 scripts/keyboard_teleop.py
+```
+
+### Design notes
+- Standalone script — imports from `src/kinematics/` package via colcon install
+- Maintains Cartesian state `[x, y, z]` (metres) + `pitch` (degrees)
+- Q/E rotates the `[x, y]` vector by an angle — reach is preserved
+- Clamps to safe workspace before every IK call; reverts on IK failure
+- Starting position: `[0.18, 0.0, 0.20]` m, pitch = 0°
+
+---
+
+## Kinematics Package
+
+**Status: planned, not yet built.**
+
+Our own ROS2 Python package providing IK/FK for the ArmPi Ultra.
+Replaces the vendor's Python-3.10-only `.so` files with pure-Python equivalents.
+
+### Why we need this
+The vendor's `inverse_kinematics.so` and `forward_kinematics.so` in
+`ArmPi_Ultra_Resources/Source Code/ROS2/src/driver/kinematics/` were compiled
+against Python 3.10.  This system runs Python 3.12 (ROS2 Jazzy / Ubuntu 24.04).
+Importing them fails with `undefined symbol: _PyUnicode_Ready`.
+
+### Planned location
+```
+ros2arm_ws/src/kinematics/
+├── package.xml
+├── setup.py
+├── setup.cfg
+├── resource/kinematics
+└── kinematics/
+    ├── __init__.py
+    ├── transform.py     ← extracted from vendor reference, pure Python
+    ├── ik.py            ← ikpy-based IK using the URDF
+    └── fk.py            ← ikpy-based FK
+```
+
+### Approach
+- **IK library:** `ikpy` (pure Python, `pip install --user ikpy`)
+- **Geometry source:** `ArmPi_Ultra_Resources/.../urdf/armpi_ultra.urdf` (SolidWorks CAD export — ground truth link lengths and joint axes)
+- **Servo mapping:** extracted from vendor `transform.py` (angle ↔ pulse conversions)
+
+### URDF notes
+- `joint1` is exported as `fixed` — base rotation (servo 6) is handled separately via `atan2(y, x)`
+- Active revolute joints in URDF: `joint2` (shoulder), `joint3` (elbow), `joint4` (wrist pitch), `joint5` (wrist roll)
+- Joint limits in URDF are placeholders (±2.09 rad) — real limits come from `transform.py`
+
+### Servo ↔ IK index mapping (critical)
+`angle2pulse()` returns indices 0–4; these map to physical servo IDs as follows:
+
+| `angle2pulse` index | Physical servo ID | Joint |
+|---|---|---|
+| 0 | 6 | Base rotation |
+| 1 | 5 | Shoulder |
+| 2 | 4 | Elbow |
+| 3 | 3 | Wrist pitch |
+| 4 | 2 | Wrist rotation |
+
+Servo 1 (gripper) is **not** part of the IK chain — controlled independently.
+
+### Build command (once package is written)
+```bash
+cd ~/ros2arm_ws
+colcon build --packages-select kinematics
+source install/setup.bash
+```
+
+---
+
+## ArmPi Ultra Description Package (URDF Simulation)
+
+**Status: URDF complete — definitive model for this project.**
+
+Custom ROS2 description package with a hand-built URDF using primitive shapes
+(no vendor STL meshes).  Launches a full RViz2 simulation with interactive
+joint sliders.  This is the canonical robot model going forward for FK/IK work.
+
+**Next planned milestone: forward kinematics verification against this URDF.**
+
+### Package location
+```
+ros2arm_ws/src/armpi_ultra_description/
+├── package.xml
+├── setup.py
+├── setup.cfg
+├── resource/armpi_ultra_description
+├── armpi_ultra_description/__init__.py
+├── urdf/
+│   └── armpi_ultra.urdf          ← definitive URDF
+├── launch/
+│   └── display.launch.py         ← launches RSP + joint_state_publisher_gui + RViz2
+└── rviz/
+    └── arm.rviz                   ← RViz2 config (Grid, RobotModel, TF)
+```
+
+### Launch
+```bash
+cd ~/ros2arm_ws
+colcon build --packages-select armpi_ultra_description
+source install/setup.bash
+ros2 launch armpi_ultra_description display.launch.py
+```
+
+### URDF joint chain
+
+| Joint name | Type | Axis | Limits | Physical servo |
+|---|---|---|---|---|
+| `joint1` | revolute | Z | ±120° (±2.094 rad) | Servo 6 — base rotation |
+| `joint2` | revolute | −Y | ±90° (±1.571 rad) | Servo 6 secondary (base tilt) |
+| `joint3` | revolute | +Y | ±90° (±1.571 rad) | Servo 5 — shoulder |
+| `joint4` | revolute | −Y | ±120° (±2.094 rad) | Servo 4 — elbow |
+| `wrist` | revolute | +Z | ±90° (±1.571 rad) | Servo 3 — wrist pitch |
+| `fixed_finger_joint` | fixed | — | — | — |
+| `gripper_joint` | revolute | +X | 0°–45° (0–0.785 rad) | Servo 1 — gripper close |
+
+### Link geometry
+
+| Link | Shape | Dimensions (x × y × z mm) | Color |
+|---|---|---|---|
+| `base_link` | cylinder | r=60, h=95 | dark grey |
+| `link1` | — | zero-length connector | — |
+| `link2` | box | 30 × 55 × 100 | blue-grey |
+| `link3` | box | 22 × 40 × 95 | light grey |
+| `link4` | box | 35 × 40 × 50 | blue-grey |
+| `link5` | box | 15 × 50 × 5 (palm plate) | dark grey |
+| `fixed_finger` | box | 7.5 × 10 × 90 | yellow |
+| `gripper_finger` | box | 7.5 × 10 × 90 | orange |
+
+### Gripper convention
+- `gripper_joint = 0.0 rad` → fully open
+- `gripper_joint = 0.785 rad (45°)` → fully closed
+- Positive rotation around +X closes the finger toward the fixed finger.
+
+### Design notes
+- Vendor URDF uses broken `package://44 001/meshes/...` URIs — avoided entirely.
+- `link1` is a zero-length link connecting `joint1` (Z rotation) and `joint2` (Y rotation) at the same position.
+- Wrist roll (servo 2) is not yet modeled — deferred to a future iteration.
+- Adams apple (servo housing on link5) is deferred cosmetic detail.
+
+---
+
 ## Kinematics Notes
 
 ### TCP offset — fixed, not dynamic
