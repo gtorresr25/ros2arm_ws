@@ -39,14 +39,14 @@ python3 arm_homes.py list
 | home4 | 230 | 498 | 82  | 749 | 597 | 504 | |
 
 ### Servo layout
-| ID | Joint |
-|---|---|
-| 1 | Gripper |
-| 2 | Wrist rotation |
-| 3 | Wrist pitch |
-| 4 | Elbow |
-| 5 | Shoulder |
-| 6 | Base rotation |
+| ID | Joint | URDF joint | transform.py map |
+|---|---|---|---|
+| 1 | Gripper | `gripper_joint` | linear (200–680 → 0–0.785 rad) |
+| 2 | Wrist roll | `wrist` | `joint5_map` |
+| 3 | Wrist pitch | `joint4` | `joint4_map` |
+| 4 | Elbow | `joint3` | `joint3_map` |
+| 5 | Shoulder | `joint2` | `joint2_map` |
+| 6 | Base rotation | `joint1` | `joint1_map` |
 
 ### SDK quirk
 `bus_servo_enable_torque(id, True)` = UNLOAD (releases, arm goes limp)
@@ -349,13 +349,13 @@ source install/setup.bash
 
 ## ArmPi Ultra Description Package (URDF Simulation)
 
-**Status: URDF complete — definitive model for this project.**
+**Status: URDF complete and FK-verified — definitive model for this project.**
 
 Custom ROS2 description package with a hand-built URDF using primitive shapes
 (no vendor STL meshes).  Launches a full RViz2 simulation with interactive
 joint sliders.  This is the canonical robot model going forward for FK/IK work.
 
-**Next planned milestone: forward kinematics verification against this URDF.**
+**FK verification complete: RViz model mirrors the physical arm via `verify_fk.py`.**
 
 ### Package location
 ```
@@ -381,17 +381,29 @@ source install/setup.bash
 ros2 launch armpi_ultra_description display.launch.py
 ```
 
+### FK verification (live robot → RViz)
+```bash
+# Terminal 1
+ros2 launch armpi_ultra_description display.launch.py
+# Terminal 2 — close the slider GUI window first to avoid conflict
+source ~/ros2arm_ws/install/setup.bash
+python3 scripts/verify_fk.py
+```
+`verify_fk.py` reads the physical arm via the SDK, converts servo pulses to joint
+angles, and publishes to `/joint_states`.  The RViz model mirrors the real arm live.
+Close the `joint_state_publisher_gui` window to hand control to the script.
+
 ### URDF joint chain
 
-| Joint name | Type | Axis | Limits | Physical servo |
-|---|---|---|---|---|
-| `joint1` | revolute | Z | ±120° (±2.094 rad) | Servo 6 — base rotation |
-| `joint2` | revolute | −Y | ±90° (±1.571 rad) | Servo 6 secondary (base tilt) |
-| `joint3` | revolute | +Y | ±90° (±1.571 rad) | Servo 5 — shoulder |
-| `joint4` | revolute | −Y | ±120° (±2.094 rad) | Servo 4 — elbow |
-| `wrist` | revolute | +Z | ±90° (±1.571 rad) | Servo 3 — wrist pitch |
-| `fixed_finger_joint` | fixed | — | — | — |
-| `gripper_joint` | revolute | +X | 0°–45° (0–0.785 rad) | Servo 1 — gripper close |
+| Joint name | Type | Axis | Limits | Servo | Sign convention |
+|---|---|---|---|---|---|
+| `joint1` | revolute | Z | ±120° | S6 — base rotation | direct |
+| `joint2` | revolute | −Y | ±90° | S5 — shoulder | flipped, −90° offset |
+| `joint3` | revolute | +Y | ±90° | S4 — elbow | direct |
+| `joint4` | revolute | −Y | ±120° | S3 — wrist pitch | flipped, −90° offset |
+| `wrist` | revolute | +Z | ±90° | S2 — wrist roll | direct |
+| `fixed_finger_joint` | fixed | — | — | — | — |
+| `gripper_joint` | revolute | +X | 0°–45° | S1 — gripper | inverted (open=max) |
 
 ### Link geometry
 

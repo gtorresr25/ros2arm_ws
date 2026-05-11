@@ -49,6 +49,7 @@ if _IKPY_PATH not in sys.path:
     sys.path.insert(0, _IKPY_PATH)
 
 from ikpy.chain import Chain
+from ament_index_python.packages import get_package_share_directory
 
 from .transform import (
     _map,
@@ -58,10 +59,7 @@ from .transform import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-# Position of servo 6 rotation axis in URDF base_link frame (from URDF joint1)
-_BASE_OFFSET = np.array([0.066956, -8.1218e-5, 0.071005])
-
-# Extra distance from ikpy chain tip (r_joint) to jaw center along arm axis.
+# Extra distance from ikpy chain tip to jaw center along arm axis.
 # Calibrated: home2 measured z=330mm, ikpy gives ~295mm → offset=35mm.
 _EE_OFFSET = 0.035   # metres
 
@@ -70,8 +68,10 @@ _HOME2_PULSES = {6: 504, 5: 510, 4: 496, 3: 502, 2: 499, 1: 230}
 
 # ── Load ikpy chain ───────────────────────────────────────────────────────────
 
-_URDF = os.path.realpath(
-    os.path.join(os.path.dirname(__file__), 'armpi_ultra.urdf')
+# Single source of truth: the armpi_ultra_description URDF
+_URDF = os.path.join(
+    get_package_share_directory('armpi_ultra_description'),
+    'urdf', 'armpi_ultra.urdf'
 )
 
 _chain = Chain.from_urdf_file(
