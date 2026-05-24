@@ -1,55 +1,55 @@
+#!/usr/bin/env python3
 """
-ik.py — ArmPi Ultra inverse and forward kinematics.
+ik.py — Analytical inverse kinematics for the ArmPi Ultra.
 
-Uses ikpy + the URDF for geometry, and transform.py for servo pulse mapping.
+Control parameters
+------------------
+theta        : base yaw (radians)                              joint1 / S6
+pitch        : camera/tool pitch from horizontal (radians)     cumulative j2+j3+j4
+               positive = angled upward, 0 = horizontal, -π/2 = pointing down
+radius       : reach along camera optical axis from shoulder pivot (metres)
+up_down      : offset perpendicular to camera axis, positive = upward (metres)
+gripper_tilt : wrist roll (radians)                            wrist joint / S2
+gripper      : open/close fraction  0.0 = fully open, 1.0 = fully closed
 
-Coordinate convention
+Camera-frame geometry
 ---------------------
-  Origin : servo 6 rotation axis (arm base plate center)
-  X      : forward
-  Y      : left
-  Z      : up
-  Units  : metres
+Origin      : shoulder pivot — the point where joint1 and joint2 share the same
+              position at height d_base above the ground.
+Forward     : along the camera/tool pointing direction at angle `pitch` from horizontal.
+Up          : perpendicular to Forward, rotated 90° CCW in the arm's vertical plane.
 
-Public API
-----------
-  solve(x, y, z, current_pulses=None)  →  {servo_id: pulse} or None
-  fk(pulses)                           →  (x, y, z) in metres
+TCP world position derived from (radius, up_down, pitch):
+    r_tcp = radius * cos(pitch) - up_down * sin(pitch)   [horizontal reach from base axis]
+    z_tcp = d_base + radius * sin(pitch) + up_down * cos(pitch)  [world height]
 
-Sign conventions (from physical joint observation with joint_jog.py)
---------------------------------------------------------------------
-  Shoulder (S5, ikpy joint2):    same sign as URDF,  offset −90°
-  Elbow    (S4, ikpy joint3):    inverted vs URDF,   offset   0°
-  Wrist pitch (S3, ikpy joint4): same sign as URDF,  offset −90°
-  Wrist roll  (S2, ikpy joint5): inverted vs URDF,   offset   0°
+Link lengths (from transform.py — definitive values)
+-----------------------------------------------------
+    d_base  = 0.094605 m   shoulder pivot height above ground
+    L1      = 0.10048  m   upper arm      (joint2 → joint3)
+    L2      = 0.100    m   forearm        (joint3 → joint4)
+    L3      = 0.055    m   wrist segment  (joint4 → wrist joint)
+    L_tool  = 0.115    m   gripper        (wrist joint → TCP)
+    L_tcp   = 0.170    m   joint4 → TCP   (= L3 + L_tool)
 
-  servo_angle(S5) =  ikpy_j2_deg − 90
-  servo_angle(S4) = −ikpy_j3_deg
-  servo_angle(S3) =  ikpy_j4_deg − 90
-  servo_angle(S2) = −ikpy_j5_deg
+URDF ↔ arm-plane angle conventions
+------------------------------------
+    q2_std  = upper arm angle from horizontal  →  j2 = q2_std − π/2
+    q3_std  = standard elbow relative angle    →  j3 = −q3_std
+    j4      = pitch − π/2 + j3 − j2           (ensures cumulative pitch = desired)
 
-  ikpy_j2 = radians(servo_S5_deg + 90)
-  ikpy_j3 = radians(−servo_S4_deg)
-  ikpy_j4 = radians(servo_S3_deg + 90)
-  ikpy_j5 = radians(−servo_S2_deg)
+Servo pulse order (angle2pulse index → servo ID):
+    index 0 → S6  base rotation   (joint1)
+    index 1 → S5  shoulder        (joint2)
+    index 2 → S4  elbow           (joint3)
+    index 3 → S3  wrist pitch     (joint4)
+    index 4 → S2  wrist roll      (wrist)
+    S1 (gripper) handled separately.
 """
 
-import os
-import sys
 import math
-import warnings
-import numpy as np
-
-# Suppress ikpy warnings about fixed joints with axis attributes
-warnings.filterwarnings('ignore', category=UserWarning, module='ikpy')
-
-# ikpy installed as user package
-_IKPY_PATH = os.path.expanduser('~/.local/lib/python3.12/site-packages')
-if _IKPY_PATH not in sys.path:
-    sys.path.insert(0, _IKPY_PATH)
-
-from ikpy.chain import Chain
-from ament_index_python.packages import get_package_share_directory
+from dataclasses import dataclass
+from typing import Optional
 
 from .transform import (
     _map,
@@ -57,143 +57,175 @@ from .transform import (
     clamp_pulses,
 )
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# ── Link lengths ──────────────────────────────────────────────────────────────
+D_BASE = 0.094605
+L1     = 0.10048
+L2     = 0.100
+L3     = 0.055
+L_TOOL = 0.115
+L_TCP  = L3 + L_TOOL   # 0.170 m  joint4 → TCP
 
-# Extra distance from ikpy chain tip to jaw center along arm axis.
-# Calibrated: home2 measured z=330mm, ikpy gives ~295mm → offset=35mm.
-_EE_OFFSET = 0.035   # metres
+# Gripper pulse range (servo 1, not part of IK chain)
+_GRIPPER_OPEN   = 200
+_GRIPPER_CLOSED = 680
 
-# Home2 servo pulses (arm straight up) — used as default IK initial guess
-_HOME2_PULSES = {6: 504, 5: 510, 4: 496, 3: 502, 2: 499, 1: 230}
 
-# ── Load ikpy chain ───────────────────────────────────────────────────────────
+# ── Result type ───────────────────────────────────────────────────────────────
+@dataclass
+class IKResult:
+    """Output of a successful IK solve.
 
-# Single source of truth: the armpi_ultra_description URDF
-_URDF = os.path.join(
-    get_package_share_directory('armpi_ultra_description'),
-    'urdf', 'armpi_ultra.urdf'
-)
+    joints : URDF joint angles in radians, keyed by joint name.
+    pulses : servo pulse values, keyed by servo ID (1–6).
+    reachable : True if the target was within workspace.
+    """
+    joints:    dict          # {'joint1': rad, 'joint2': rad, ..., 'wrist': rad}
+    pulses:    dict          # {6: int, 5: int, 4: int, 3: int, 2: int, 1: int}
+    reachable: bool = True
 
-_chain = Chain.from_urdf_file(
-    _URDF,
-    active_links_mask=[False, False, True, True, True, True, False, False],
-)
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _pulses_to_ikpy(pulses: dict) -> list:
-    """Convert servo pulse dict to 8-element ikpy angle vector."""
-    s5 = _map(pulses.get(5, _HOME2_PULSES[5]), joint2_map)
-    s4 = _map(pulses.get(4, _HOME2_PULSES[4]), joint3_map)
-    s3 = _map(pulses.get(3, _HOME2_PULSES[3]), joint4_map)
-    s2 = _map(pulses.get(2, _HOME2_PULSES[2]), joint5_map)
+def _joint_angles_to_pulses(j1, j2, j3, j4, j5, gripper_fraction=0.0):
+    """Convert URDF joint angles (radians) to servo pulse values.
 
-    j2 = math.radians( s5 + 90)
-    j3 = math.radians(-s4)
-    j4 = math.radians( s3 + 90)
-    j5 = math.radians(-s2)
+    Inverse of the pulse→angle transforms in verify_fk.py:
+        j1 =  radians(_map(p6, joint1_map))
+        j2 = -radians(_map(p5, joint2_map)) - pi/2
+        j3 =  radians(_map(p4, joint3_map))
+        j4 = -radians(_map(p3, joint4_map)) - pi/2
+        j5 =  radians(_map(p2, joint5_map))
 
-    return [0.0, 0.0, j2, j3, j4, j5, 0.0, 0.0]
+    Returns dict keyed by servo ID.
+    """
+    deg = math.degrees
+
+    p6 = _map(deg(j1),             joint1_map, inverse=True)
+    p5 = _map(-(deg(j2) + 90.0),   joint2_map, inverse=True)
+    p4 = _map(deg(j3),             joint3_map, inverse=True)
+    p3 = _map(-(deg(j4) + 90.0),   joint4_map, inverse=True)
+    p2 = _map(deg(j5),             joint5_map, inverse=True)
+
+    # Gripper: 0.0 = open (pulse 200), 1.0 = closed (pulse 680)
+    gripper_fraction = max(0.0, min(1.0, gripper_fraction))
+    p1 = _GRIPPER_OPEN + gripper_fraction * (_GRIPPER_CLOSED - _GRIPPER_OPEN)
+
+    raw = [p6, p5, p4, p3, p2, p1]
+    clamped = clamp_pulses(raw)
+
+    return {6: clamped[0], 5: clamped[1], 4: clamped[2],
+            3: clamped[3], 2: clamped[4], 1: clamped[5]}
 
 
-def _ikpy_to_pulses(angles: list, s6_pulse: int) -> dict:
-    """Convert 8-element ikpy angle vector + base pulse to servo pulse dict."""
-    j2 = math.degrees(angles[2])
-    j3 = math.degrees(angles[3])
-    j4 = math.degrees(angles[4])
-    j5 = math.degrees(angles[5])
+def _check_limits(j2, j3, j4):
+    """Return True if joint angles are within safe servo limits.
 
-    s5_angle =  j2 - 90
-    s4_angle = -j3
-    s3_angle =  j4 - 90
-    s2_angle = -j5
-
-    raw = [
-        _map(s5_angle, joint2_map, inverse=True),
-        _map(s4_angle, joint3_map, inverse=True),
-        _map(s3_angle, joint4_map, inverse=True),
-        _map(s2_angle, joint5_map, inverse=True),
-    ]
-    p5, p4, p3, p2 = clamp_pulses(raw)
-
-    return {6: s6_pulse, 5: p5, 4: p4, 3: p3, 2: p2}
+    Limits derived from transform.py servo angle ranges.
+    j2 URDF ∈ [−π/2,  π/2]   (servo angle ∈ [−180.2,  0.2] deg)
+    j3 URDF ∈ [−2.10, 2.10]  (servo angle ∈ [−120.2, 120.2] deg)
+    j4 URDF ∈ [−1.92, 1.92]  (servo angle ∈ [−200.2,  20.2] deg translated)
+    """
+    ok = True
+    ok &= math.radians(-180.2) <= -(j2 + math.pi/2) <= math.radians(0.2)
+    ok &= math.radians(-120.2) <= j3 <= math.radians(120.2)
+    ok &= math.radians(-200.2) <= -(j4 + math.pi/2) <= math.radians(20.2)
+    return ok
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def solve(x: float, y: float, z: float,
-          current_pulses: dict = None) -> dict | None:
-    """
-    Inverse kinematics.
+def solve(
+    theta:         float,
+    pitch:         float,
+    radius:        float,
+    up_down:       float,
+    gripper_tilt:  float = 0.0,
+    gripper:       float = 0.0,
+    elbow_up:      bool  = False,
+) -> IKResult:
+    """Solve inverse kinematics for the ArmPi Ultra.
 
     Parameters
     ----------
-    x, y, z        : target jaw-center position (metres) relative to servo 6
-    current_pulses : {servo_id: pulse} used as warm-start initial guess.
-                     Defaults to home2 if not provided.
+    theta        : Base yaw in radians.  0 = forward, positive = CCW.
+    pitch        : Camera/tool pitch from horizontal in radians.
+                   0 = horizontal, π/2 = pointing straight up, negative = down.
+    radius       : Distance along the camera optical axis from the shoulder
+                   pivot to the TCP (metres).  Positive = forward.
+    up_down      : Offset perpendicular to the camera axis (metres).
+                   Positive = upward in camera frame.
+    gripper_tilt : Wrist roll angle in radians.  0 = neutral.
+    gripper      : Gripper fraction: 0.0 = fully open, 1.0 = fully closed.
+    elbow_up     : True = elbow-up solution (default), False = elbow-down.
 
     Returns
     -------
-    {servo_id: pulse} for servos 2-6, or None if ikpy found no solution.
+    IKResult with .joints (URDF angles), .pulses (servo IDs), .reachable flag.
+    If the target is unreachable, .reachable is False and angles/pulses reflect
+    the nearest reachable configuration (clamped).
     """
-    # Base rotation — servo 6
-    s6_angle = math.degrees(math.atan2(y, x))
-    s6_pulse  = clamp_pulses([_map(s6_angle, joint1_map, inverse=True)])[0]
+    # ── Step 1: TCP world position from camera-frame inputs ───────────────────
+    # Origin at shoulder pivot (r=0, z=d_base).
+    # Camera forward = pitch direction; camera up = 90° CCW from forward.
+    r_tcp = radius  * math.cos(pitch) - up_down * math.sin(pitch)
+    z_tcp = D_BASE  + radius * math.sin(pitch) + up_down * math.cos(pitch)
 
-    # Radial reach in the arm's plane
-    r = math.sqrt(x**2 + y**2)
+    # ── Step 2: Joint4 (wrist pivot) position in arm plane ───────────────────
+    # TCP = joint4 + L_tcp along the tool direction.
+    r_j4     = r_tcp - L_TCP * math.cos(pitch)
+    z_j4_rel = z_tcp - D_BASE - L_TCP * math.sin(pitch)   # relative to shoulder
 
-    # IK target in URDF frame.
-    # Subtract EE_OFFSET from z — approximation that treats the arm as
-    # roughly vertical; fine for most poses, revisit if large pitch angles
-    # cause visible error.
-    target_urdf = _BASE_OFFSET + np.array([r, 0.0, z - _EE_OFFSET])
+    # ── Step 3: 2R planar IK for joints 2 & 3 ────────────────────────────────
+    D_sq = r_j4**2 + z_j4_rel**2
+    D    = math.sqrt(D_sq)
 
-    initial = _pulses_to_ikpy(current_pulses if current_pulses else _HOME2_PULSES)
+    cos_q3 = (D_sq - L1**2 - L2**2) / (2.0 * L1 * L2)
+    reachable = True
 
-    try:
-        result = _chain.inverse_kinematics(
-            target_position=target_urdf,
-            initial_position=initial,
-        )
-    except Exception:
-        return None
+    if cos_q3 < -1.0 or cos_q3 > 1.0:
+        reachable = False
+        cos_q3 = max(-1.0, min(1.0, cos_q3))
 
-    return _ikpy_to_pulses(result, s6_pulse)
+    q3_std = math.acos(cos_q3)                  # elbow-up: positive
+    if not elbow_up:
+        q3_std = -q3_std                         # elbow-down: negative
+
+    gamma = math.atan2(z_j4_rel, r_j4)
+    delta = math.atan2(L2 * math.sin(q3_std), L1 + L2 * math.cos(q3_std))
+    q2_std = gamma - delta
+
+    # ── Step 4: Convert arm-plane angles to URDF joint angles ─────────────────
+    j1 = theta
+    j2 = q2_std - math.pi / 2
+    j3 = -q3_std
+    j4 = pitch - math.pi / 2 + j3 - j2   # ensures cumulative pitch == desired
+    j5 = gripper_tilt                     # wrist roll is independent
+
+    # ── Step 5: Joint limit check ─────────────────────────────────────────────
+    if not _check_limits(j2, j3, j4):
+        reachable = False
+
+    # ── Step 6: Build outputs ─────────────────────────────────────────────────
+    joints = {
+        'joint1':       j1,
+        'joint2':       j2,
+        'joint3':       j3,
+        'joint4':       j4,
+        'wrist':        j5,
+        'gripper_joint': gripper * 0.785,
+    }
+
+    pulses = _joint_angles_to_pulses(j1, j2, j3, j4, j5, gripper)
+
+    return IKResult(joints=joints, pulses=pulses, reachable=reachable)
 
 
-def fk(pulses: dict) -> tuple[float, float, float]:
+def tcp_world_position(pitch, radius, up_down):
+    """Return the world-frame (r, z) position of the TCP given camera-frame inputs.
+
+    Useful for visualising or validating the workspace without running a full solve.
+    r = horizontal reach from base axis; z = height above ground.
     """
-    Forward kinematics.
-
-    Parameters
-    ----------
-    pulses : {servo_id: pulse}
-
-    Returns
-    -------
-    (x, y, z) jaw-center position in metres relative to servo 6.
-    """
-    # Base rotation angle
-    s6_deg  = _map(pulses.get(6, _HOME2_PULSES[6]), joint1_map)
-    theta1  = math.radians(s6_deg)
-
-    # Run ikpy FK in URDF frame
-    mat     = _chain.forward_kinematics(_pulses_to_ikpy(pulses))
-    tip_urdf = mat[:3, 3]
-
-    # Position relative to servo 6 base
-    tip_rel = tip_urdf - _BASE_OFFSET
-
-    # Add EE offset along the end-effector's Z axis (arm pointing direction)
-    ee_z_axis = mat[:3, 2]
-    tip_rel   = tip_rel + _EE_OFFSET * ee_z_axis
-
-    # Rotate from arm plane (URDF frame) to world frame via base rotation
-    c = math.cos(theta1)
-    s = math.sin(theta1)
-    x_w =  c * tip_rel[0] - s * tip_rel[1]
-    y_w =  s * tip_rel[0] + c * tip_rel[1]
-    z_w =  tip_rel[2]
-
-    return x_w, y_w, z_w
+    r = radius  * math.cos(pitch) - up_down * math.sin(pitch)
+    z = D_BASE  + radius * math.sin(pitch) + up_down * math.cos(pitch)
+    return r, z

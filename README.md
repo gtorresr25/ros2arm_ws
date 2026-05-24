@@ -247,61 +247,88 @@ python3 scripts/floor_filter.py
 
 ## Keyboard Teleop
 
-**Status: script written, kinematics package not yet built — not runnable yet.**
+**Status: complete and tested on hardware.**
 
-End-effector teleoperation via keyboard.  Requires the `kinematics` ROS2 package
-(see below) and `ikpy` to be installed before it can run.
+Two teleop scripts with identical controls, differing only in how pitch behaves.
+Both start at home1 and revert any move that the IK deems unreachable.
 
-### File
-| File | Purpose |
-|---|---|
-| `scripts/keyboard_teleop.py` | Standalone keyboard teleop — no ROS stack required at runtime |
+### Files
+| File | Mode | Pitch behaviour |
+|---|---|---|
+| `scripts/teleop_ik.py` | Camera-frame | Pitch moves the TCP along the camera axis |
+| `scripts/teleop_ik_tcp.py` | TCP-pitch | Pitch rotates the tool at the TCP — tip stays fixed |
 
-### Controls
+### Controls — `teleop_ik.py` (camera-frame)
 | Key | Action |
 |---|---|
-| `W` / `S` | Z up / down |
-| `Q` / `E` | Base rotate left / right (rotates [x,y] vector, keeps reach) |
-| `↑` / `↓` | Reach forward / backward (X axis) |
-| `←` / `→` | Wrist pitch tilt −/+ |
-| `Z` / `X` | Gripper open / close |
-| `C` | Toggle torque engage / release |
-| `H` | Return to home position |
-| `1`–`9` | Step size multiplier (1 = 1 mm / 2°, 9 = 9 mm / 18°) |
-| `P` | Print current position |
+| `W` / `S` | Up / down (`up_down`) |
+| `E` / `Q` | Forward / backward (`radius`) |
+| `R` / `F` | Pitch tilt up / down |
+| `A` / `D` | Base rotate left / right |
+| `H` | Return to home1 |
+| `1`–`9` | Step size multiplier |
+| `P` | Print current state |
 | `Esc` / `Ctrl-C` | Quit |
 
-### Run (once kinematics package is built)
+### Controls — `teleop_ik_tcp.py` (TCP-pitch)
+| Key | Action |
+|---|---|
+| `W` / `S` | Up / down (`z_tcp`) |
+| `E` / `Q` | Forward / backward (`r_tcp`) |
+| `R` / `F` | Pitch tilt up / down (rotates at TCP) |
+| `A` / `D` | Base rotate left / right |
+| `H` | Return to home1 |
+| `1`–`9` | Step size multiplier |
+| `P` | Print current state |
+| `Esc` / `Ctrl-C` | Quit |
+
+### Run
 ```bash
-pip install --user ikpy
-source /opt/ros/jazzy/setup.bash
-source ~/ros2arm_ws/install/setup.bash
-python3 scripts/keyboard_teleop.py
+cd ~/ros2arm_ws
+colcon build --packages-select kinematics
+source install/setup.bash
+
+python3 scripts/teleop_ik.py        # camera-frame mode
+python3 scripts/teleop_ik_tcp.py    # TCP-pitch mode
 ```
 
-### Design notes
-- Standalone script — imports from `src/kinematics/` package via colcon install
-- Maintains Cartesian state `[x, y, z]` (metres) + `pitch` (degrees)
-- Q/E rotates the `[x, y]` vector by an angle — reach is preserved
-- Clamps to safe workspace before every IK call; reverts on IK failure
-- Starting position: `[0.18, 0.0, 0.20]` m, pitch = 0°
+---
+
+## IK Visualiser
+
+Standalone 2D stick-figure debugger — no ROS, no robot connection.
+Sliders update the arm live.  Status box shows TCP position and joint angles;
+turns red when out of reach.
+
+### Files
+| File | Mode | Sliders |
+|---|---|---|
+| `scripts/ik_viz.py` | Camera-frame | `pitch`, `radius`, `up_down` |
+| `scripts/ik_viz_tcp.py` | TCP-pitch | `pitch`, `r_tcp`, `z_tcp` |
+
+### Run
+```bash
+python3 scripts/ik_viz.py        # camera-frame
+python3 scripts/ik_viz_tcp.py    # TCP-pitch
+```
+
+Both open at the home1 position.
 
 ---
 
 ## Kinematics Package
 
-**Status: planned, not yet built.**
+**Status: complete and built.**
 
-Our own ROS2 Python package providing IK/FK for the ArmPi Ultra.
-Replaces the vendor's Python-3.10-only `.so` files with pure-Python equivalents.
+Pure-Python analytical IK/FK for the ArmPi Ultra.
+Replaces the vendor's Python-3.10-only `.so` files.
 
 ### Why we need this
-The vendor's `inverse_kinematics.so` and `forward_kinematics.so` in
-`ArmPi_Ultra_Resources/Source Code/ROS2/src/driver/kinematics/` were compiled
+The vendor's `inverse_kinematics.so` and `forward_kinematics.so` were compiled
 against Python 3.10.  This system runs Python 3.12 (ROS2 Jazzy / Ubuntu 24.04).
 Importing them fails with `undefined symbol: _PyUnicode_Ready`.
 
-### Planned location
+### Package location
 ```
 ros2arm_ws/src/kinematics/
 ├── package.xml
@@ -310,40 +337,71 @@ ros2arm_ws/src/kinematics/
 ├── resource/kinematics
 └── kinematics/
     ├── __init__.py
-    ├── transform.py     ← extracted from vendor reference, pure Python
-    ├── ik.py            ← ikpy-based IK using the URDF
-    └── fk.py            ← ikpy-based FK
+    ├── transform.py   ← servo ↔ angle conversions (extracted from vendor)
+    ├── ik.py          ← camera-frame IK: solve(theta, pitch, radius, up_down)
+    └── ik_tcp.py      ← TCP-pitch IK:    solve(theta, pitch, r_tcp, z_tcp)
 ```
 
-### Approach
-- **IK library:** `ikpy` (pure Python, `pip install --user ikpy`)
-- **Geometry source:** `ArmPi_Ultra_Resources/.../urdf/armpi_ultra.urdf` (SolidWorks CAD export — ground truth link lengths and joint axes)
-- **Servo mapping:** extracted from vendor `transform.py` (angle ↔ pulse conversions)
-
-### URDF notes
-- `joint1` is exported as `fixed` — base rotation (servo 6) is handled separately via `atan2(y, x)`
-- Active revolute joints in URDF: `joint2` (shoulder), `joint3` (elbow), `joint4` (wrist pitch), `joint5` (wrist roll)
-- Joint limits in URDF are placeholders (±2.09 rad) — real limits come from `transform.py`
-
-### Servo ↔ IK index mapping (critical)
-`angle2pulse()` returns indices 0–4; these map to physical servo IDs as follows:
-
-| `angle2pulse` index | Physical servo ID | Joint |
-|---|---|---|
-| 0 | 6 | Base rotation |
-| 1 | 5 | Shoulder |
-| 2 | 4 | Elbow |
-| 3 | 3 | Wrist pitch |
-| 4 | 2 | Wrist rotation |
-
-Servo 1 (gripper) is **not** part of the IK chain — controlled independently.
-
-### Build command (once package is written)
+### Build
 ```bash
 cd ~/ros2arm_ws
 colcon build --packages-select kinematics
 source install/setup.bash
 ```
+
+### IK approach — analytical geometry, no external library
+Both solvers use the same 3-step geometric IK:
+1. **Base yaw** — `theta` sets joint1 directly.
+2. **2R planar IK** — solves joints 2 & 3 in the arm's vertical plane.
+3. **Wrist pitch** — joint4 is derived to match the desired tool pitch.
+
+Elbow-down solution is used (verified against all four home positions with `ik_viz.py`).
+
+### Control modes
+
+**Camera-frame (`ik.py`)**
+```python
+from kinematics.ik import solve
+result = solve(theta, pitch, radius, up_down)
+# radius  = reach along camera optical axis from shoulder pivot
+# up_down = offset perpendicular to camera axis (positive = up)
+```
+
+**TCP-pitch (`ik_tcp.py`)**
+```python
+from kinematics.ik_tcp import solve
+result = solve(theta, pitch, r_tcp, z_tcp)
+# r_tcp = horizontal reach of TCP from base axis (world frame)
+# z_tcp = height of TCP above ground (world frame)
+# pitch rotates the arm AT the TCP — tip stays fixed in space
+```
+
+### IKResult fields
+```python
+result.joints    # {'joint1': rad, 'joint2': rad, ..., 'wrist': rad, 'gripper_joint': rad}
+result.pulses    # {6: int, 5: int, 4: int, 3: int, 2: int, 1: int}  keyed by servo ID
+result.reachable # False if target is outside workspace or joint limits
+```
+
+### Servo ↔ IK index mapping
+| Servo ID | Joint | Role |
+|---|---|---|
+| S6 | `joint1` | Base rotation |
+| S5 | `joint2` | Shoulder |
+| S4 | `joint3` | Elbow |
+| S3 | `joint4` | Wrist pitch |
+| S2 | `wrist` | Wrist roll |
+| S1 | `gripper_joint` | Gripper (not part of IK chain) |
+
+### Link lengths (from transform.py — definitive)
+| Symbol | Value | Segment |
+|---|---|---|
+| `d_base` | 0.094605 m | Ground → shoulder pivot |
+| `L1` | 0.10048 m | Upper arm (joint2 → joint3) |
+| `L2` | 0.100 m | Forearm (joint3 → joint4) |
+| `L3` | 0.055 m | Wrist segment (joint4 → wrist joint) |
+| `L_tool` | 0.115 m | Gripper (wrist joint → TCP) |
+| `L_tcp` | 0.170 m | joint4 → TCP (= L3 + L_tool) |
 
 ---
 
@@ -434,10 +492,24 @@ Close the `joint_state_publisher_gui` window to hand control to the script.
 ## Kinematics Notes
 
 ### TCP offset — fixed, not dynamic
-`transform.py` uses a fixed `tool_link = 0.115m` for the gripper length (plus `link3 = 0.055m` for the wrist segment).
-The IK target position is at the gripper tip — no manual offset needed when passing camera-derived positions.
+`transform.py` uses a fixed `L_tool = 0.115m` for the gripper length (plus `L3 = 0.055m` for the wrist segment).
+The IK target is always the gripper tip — no manual offset needed.
 
-**Open question:** the `tool_link` offset is fixed regardless of gripper aperture.
+**Open question:** the `L_tool` offset is fixed regardless of gripper aperture.
 If the gripper is a parallel jaw type, this is fine (fingers move laterally, tip depth doesn't change).
 If it's a linkage/scissor type, closing pulls the tip backward and the fixed offset will put the tip short of the target.
-**Revisit this when integrating camera-guided grasping** — a quick empirical test (command to known position, close, check contact) will confirm whether compensation is needed.
+Revisit when integrating camera-guided grasping.
+
+### Angle sign conventions (pulse → URDF)
+```
+j1 =  radians(_map(p6, joint1_map))
+j2 = -radians(_map(p5, joint2_map)) - π/2
+j3 =  radians(_map(p4, joint3_map))
+j4 = -radians(_map(p3, joint4_map)) - π/2
+j5 =  radians(_map(p2, joint5_map))
+```
+j2 and j4 are flipped and offset by −90°.  At servo center (pulse 500) both read 0° → URDF angle = −π/2.
+
+### Elbow solution
+Elbow-down (`elbow_up=False`) is the correct solution for this arm.
+Verified visually with `ik_viz.py` against all four home positions.
