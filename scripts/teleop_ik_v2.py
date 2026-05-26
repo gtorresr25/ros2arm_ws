@@ -37,6 +37,7 @@ import threading
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float32MultiArray
 
 # ── SDK ───────────────────────────────────────────────────────────────────────
 SDK_PATH = ("/home/andres/ros2arm_ws/ArmPi_Ultra_Resources"
@@ -141,7 +142,8 @@ def pulses_to_state(p):
 class JointPublisher(Node):
     def __init__(self):
         super().__init__('teleop_ik_v2')
-        self.pub = self.create_publisher(JointState, '/joint_states', 10)
+        self.pub    = self.create_publisher(JointState, '/joint_states', 10)
+        self.ik_pub = self.create_publisher(Float32MultiArray, '/teleop/ik_state', 10)
 
     def publish(self, joints: dict):
         msg = JointState()
@@ -149,6 +151,13 @@ class JointPublisher(Node):
         msg.name     = list(joints.keys())
         msg.position = list(joints.values())
         self.pub.publish(msg)
+
+    def publish_ik_state(self, theta, pitch, radius, up_down, gripper_frac):
+        # Field order: [theta, pitch, radius, up_down, gripper_frac]
+        msg = Float32MultiArray()
+        msg.data = [float(theta), float(pitch), float(radius),
+                    float(up_down), float(gripper_frac)]
+        self.ik_pub.publish(msg)
 
 # ── Terminal mouse ────────────────────────────────────────────────────────────
 _MOUSE_ON  = '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
@@ -323,7 +332,7 @@ def main():
                         elif btn == 65:                          # scroll down → extend
                             des_radius += sens * SENS_BASE['radius']
 
-                        elif btn == 0 and pressed:              # left click → grip
+                        elif btn == 0 and pressed and sens != 0:   # left click → grip
                             if grip_thread is None or not grip_thread.is_alive():
                                 grip_stop.clear()
                                 grip_thread = threading.Thread(
@@ -333,7 +342,7 @@ def main():
                                 grip_thread.start()
                                 note = '[gripping]'
 
-                        elif btn == 2 and pressed:              # right click → release
+                        elif btn == 2 and pressed and sens != 0:   # right click → release
                             grip_stop.set()                     # abort grip if running
                             grip_release(board, board_lock)
                             note = '[released]'
@@ -362,6 +371,8 @@ def main():
                             MOVE_DURATION,
                             [[6, p[6]], [5, p[5]], [4, p[4]], [3, p[3]], [2, p[2]]])
                     ros_node.publish(result.joints)
+                    ros_node.publish_ik_state(smo_theta, smo_pitch, smo_radius,
+                                              smo_up_down, gripper_frac)
                     sent_theta, sent_pitch, sent_radius, sent_up_down = (
                         smo_theta, smo_pitch, smo_radius, smo_up_down)
                     if note == '[home1]':

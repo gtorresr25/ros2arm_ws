@@ -245,6 +245,47 @@ python3 scripts/floor_filter.py
 
 ---
 
+## Mouse + Keyboard Teleop v2 (with RViz + Camera)
+
+**Status: complete and tested on hardware.**
+
+`teleop_ik_v2.py` — mouse-driven teleop with stall-detected gripper, RViz visualization,
+and live RGB + depth camera feed. Requires a one-time build if packages have changed.
+
+### Build
+```bash
+cd ~/ros2arm_ws
+colcon build --packages-select kinematics armpi_ultra_description
+source install/setup.bash
+```
+
+### Run
+```bash
+# Terminal 1 — camera driver + RViz (robot model, RGB feed, depth feed)
+ros2 launch armpi_ultra_description teleop_rviz.launch.py
+
+# Terminal 2 — teleop
+cd ~/ros2arm_ws && source install/setup.bash
+python3 scripts/teleop_ik_v2.py
+```
+
+### Controls
+| Input | Action |
+|---|---|
+| Mouse left / right | Base rotation (`theta`) |
+| Mouse up / down | Vertical position (`up_down`) |
+| Scroll up / down | Reach in / out (`radius`) |
+| `Q` / `E` | Pitch tilt up / down |
+| Left click | Grip (stall-detected) |
+| Right click | Release gripper |
+| `H` | Return to home1 |
+| `0` | Mouse off (disables all mouse input + gripper) |
+| `1`–`9` | Sensitivity multiplier |
+| `P` | Print current state |
+| `Esc` / `Ctrl-C` | Quit |
+
+---
+
 ## Keyboard Teleop
 
 **Status: complete and tested on hardware.**

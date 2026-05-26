@@ -24,11 +24,12 @@ demonstrations on the ArmPi Ultra robot arm, then train an ACT
 
 ## Repository layout
 
-All code lives in `/home/andres/ros2arm_ws/`. Key files to read:
+All code lives in `/home/andres/ros2arm_ws/`. Key files:
 
 ```
 scripts/
-  teleop_ik_v2.py          ← MAIN TELEOP — this is what runs during recording
+  teleop_ik_v2.py          ← MAIN TELEOP — runs during recording
+  crosshair_overlay.py     ← ROS node: draws crosshair on RGB, republishes
   selfPlanning/            ← planning docs (here)
 
 src/
@@ -40,16 +41,44 @@ src/
   armpi_ultra_description/
     urdf/armpi_ultra.urdf  ← robot model (joint names, link geometry)
     launch/
-      teleop_rviz.launch.py   ← RViz without joint_state_publisher_gui
+      teleop_rviz.launch.py   ← MAIN LAUNCH FILE (camera + crosshair + RViz)
       display.launch.py       ← original (conflicts with teleop — do not use)
-    rviz/arm.rviz
+    rviz/
+      arm_3dviz.rviz       ← RViz config: robot model + RGB crosshair + depth
+      arm.rviz             ← robot model only (no camera)
 
   deptrum-ros-driver-aurora930/
-    launch_aurora930/launch/aurora930_launch.py   ← camera ROS driver
+    launch_aurora930/launch/aurora930_launch.py   ← camera driver (launched automatically)
 
 grip/
   gripper.py               ← full smart-grip module (not used by teleop v2)
 ```
+
+---
+
+## How to run the teleop session
+
+```bash
+# Build (only needed after code changes)
+cd ~/ros2arm_ws
+colcon build --packages-select kinematics armpi_ultra_description
+source install/setup.bash
+```
+
+```bash
+# Terminal 1 — camera driver + crosshair node + RViz
+ros2 launch armpi_ultra_description teleop_rviz.launch.py
+```
+
+```bash
+# Terminal 2 — teleop
+cd ~/ros2arm_ws && source install/setup.bash
+python3 scripts/teleop_ik_v2.py
+```
+
+> The launch file starts the Aurora 930 camera driver, the crosshair overlay
+> node, and RViz all together. The teleop must stay in its own terminal because
+> it uses raw terminal input (mouse + keyboard via tty.setraw).
 
 ---
 
@@ -65,8 +94,10 @@ grip/
    - Calls `kinematics.ik.solve(theta, pitch, radius, up_down)` →
      returns per-servo pulse values + URDF joint angles.
    - Sends pulse commands to servos 2–6 (arm) via serial.
-   - Publishes URDF joint angles to `/joint_states` (ROS 2 topic).
+   - Publishes URDF joint angles to `/joint_states`.
+   - Publishes IK state to `/teleop/ik_state`.
 4. **Gripper** runs in a background thread (servo 1 only), stall-detected.
+   Disabled when `sens == 0` (mouse-off mode).
 
 ### IK control knobs (camera-frame)
 
@@ -94,63 +125,61 @@ Servo pulse range: 0–1000. See `transform.py` for angle ↔ pulse maps.
 
 ## ROS 2 topics available during teleop
 
-| Topic | Type | Publisher | Hz |
-|---|---|---|---|
-| `/joint_states` | `sensor_msgs/JointState` | teleop_ik_v2.py | 12 |
-| `/aurora/rgb/image_raw` | `sensor_msgs/Image` | aurora930_node | 12 |
-| `/aurora/depth/image_raw` | `sensor_msgs/Image` | aurora930_node | 12 |
-| `/aurora/depth/points` | `sensor_msgs/PointCloud2` | aurora930_node | 12 |
+| Topic | Type | Publisher | Hz | Notes |
+|---|---|---|---|---|
+| `/joint_states` | `sensor_msgs/JointState` | teleop_ik_v2.py | 12 | URDF joint angles |
+| `/teleop/ik_state` | `std_msgs/Float32MultiArray` | teleop_ik_v2.py | 12 | IK knobs — see below |
+| `/aurora/rgb/image_raw` | `sensor_msgs/Image` | aurora930_node | 12 | Raw RGB |
+| `/aurora/rgb/crosshair` | `sensor_msgs/Image` | crosshair_overlay.py | 12 | RGB + green crosshair |
+| `/aurora/depth/image_raw` | `sensor_msgs/Image` | aurora930_node | 12 | Depth (uint16, mm) |
+| `/aurora/points2` | `sensor_msgs/PointCloud2` | aurora930_node | 12 | Note: NOT /aurora/depth/points |
 
----
-
-## Running teleop + camera simultaneously
-
-```bash
-# Terminal 1 — camera
-ros2 launch deptrum-ros-driver-aurora930 aurora930_launch.py
-
-# Terminal 2 — optional RViz (no conflict with teleop)
-ros2 launch armpi_ultra_description teleop_rviz.launch.py
-
-# Terminal 3 — teleop
-cd ~/ros2arm_ws && source install/setup.bash
-python3 scripts/teleop_ik_v2.py
+### `/teleop/ik_state` field order
 ```
-
-> `teleop_rviz.launch.py` is a trimmed version of `display.launch.py`
-> that omits `joint_state_publisher_gui` (which would conflict with the
-> teleop's own `/joint_states` publisher).
+[theta, pitch, radius, up_down, gripper_frac]
+```
+- `theta`        — base yaw (rad)
+- `pitch`        — tool tilt (rad)
+- `radius`       — reach (m)
+- `up_down`      — vertical offset (m)
+- `gripper_frac` — gripper open/close fraction (0.0 = open, 1.0 = closed)
 
 ---
 
-## What Claude needs to help design
+## Crosshair overlay
 
-1. **Observation space** — which combination of inputs to feed ACT:
-   - RGB image only?
-   - RGB + depth?
-   - RGB + proprioception (joint angles from `/joint_states`)?
-   - Wrist-mounted camera vs. fixed camera?
+`scripts/crosshair_overlay.py` sits between the camera driver and all consumers
+(RViz, data recorder, ACT policy). It draws a bright green crosshair at a fixed
+position on every RGB frame and republishes on `/aurora/rgb/crosshair`.
 
-2. **Action space** — what the policy should output:
-   - Absolute joint angles (position control)?
-   - Delta joint angles per timestep?
-   - Cartesian deltas (theta, pitch, radius, up_down) in IK space?
-   - Servo pulses directly?
+**The crosshair must be present in both training data and inference frames.**
+Always use `/aurora/rgb/crosshair` — never the raw topic — as the RGB observation.
 
-3. **Data recorder node** — a ROS 2 node (or script) that:
-   - Subscribes to `/joint_states` + `/aurora/rgb/image_raw`
-   - Saves synchronized episodes to HDF5 (the ACT standard format)
-   - Records on keypress start/stop during teleop
+---
 
-4. **ACT policy interface** — a ROS 2 node that:
-   - Loads a trained checkpoint
-   - Subscribes to observations
-   - Publishes actions back to the arm (bypassing teleop)
+## Decided: observation and action space
 
-5. **Practical constraints on RPi 5**:
-   - ACT inference is typically done on GPU — how to handle on RPi?
-   - Image resolution tradeoff (Aurora 930 supports multiple modes)
-   - Whether to offload training to another machine
+### Observation space (ACT inputs)
+
+| Field | Source | HDF5 path | Shape |
+|---|---|---|---|
+| RGB image | `/aurora/rgb/crosshair` | `observations/images/top` | `(T, H, W, 3)` uint8 |
+| Depth image | `/aurora/depth/image_raw` | `observations/images/depth` | `(T, H, W)` uint16 |
+| Proprioception | `/teleop/ik_state` | `observations/qpos` | `(T, 5)` float32 |
+
+### Action space (ACT outputs)
+
+| Field | Source | HDF5 path | Shape |
+|---|---|---|---|
+| IK targets | `/teleop/ik_state` | `action` | `(T, 5)` float32 |
+
+**Action = absolute IK knob values** `(theta, pitch, radius, up_down, gripper_frac)`.
+At inference, each predicted action is passed directly to `kinematics.ik.solve()` →
+servo pulses. No integration or delta accumulation.
+
+### Why IK space, not joint space
+The teleop operates in IK space — the policy learns in the same vocabulary the
+human operator used. 5D instead of 7D, and maps directly to `solve()` at inference.
 
 ---
 
@@ -165,20 +194,52 @@ The standard ACT data format uses HDF5 files with this structure:
 episode_N.hdf5
   /observations/
     images/
-      top/          ← (T, H, W, 3) uint8
-    qpos/           ← (T, num_joints) float32   joint positions
-    qvel/           ← (T, num_joints) float32   joint velocities (optional)
-  /action/          ← (T, num_joints) float32   joint positions commanded
+      top/          ← (T, H, W, 3) uint8   RGB with crosshair
+      depth/        ← (T, H, W)    uint16  depth in mm
+    qpos/           ← (T, 5)       float32 [theta, pitch, radius, up_down, gripper_frac]
+  /action/          ← (T, 5)       float32 [theta, pitch, radius, up_down, gripper_frac]
 ```
-where T = number of timesteps in the episode.
 
 ---
 
-## Key questions to resolve first
+## What still needs to be built
 
-- How many joints does the policy control? (6 arm + 1 gripper = 7 total, or
-  just the 4 IK knobs + gripper?)
-- Is one camera sufficient, or do we need a second wrist-mounted view?
-- What is the target task exactly? (e.g., pick cube from fixed location and
-  place in bowl — define the scene precisely before recording)
-- Where will ACT training run? (RPi 5 cannot train — needs a separate GPU machine)
+### 1. Data recorder (next priority)
+A script (`scripts/act_recorder.py`) that:
+- Subscribes to `/aurora/rgb/crosshair` + `/aurora/depth/image_raw` + `/teleop/ik_state`
+- Synchronizes all three streams (message_filters.ApproximateTimeSynchronizer)
+- Records on keypress (`R` = start, `S` = stop) during a live teleop session
+- Saves each episode to `data/episode_N.hdf5` in the format above
+- Prints episode length and file path on save
+
+### 2. Task definition (blocker for data collection)
+The scene must be fixed before recording any episodes. Define:
+- Object identity (e.g. small cube, specific color)
+- Object start position (fixed marker on table)
+- Goal position (e.g. fixed bowl location)
+- Camera mount position (must not move between sessions)
+
+### 3. Training machine
+RPi 5 cannot train ACT — a GPU machine is required.
+- Clone https://github.com/tonyzhaozh/act on the GPU machine
+- Transfer HDF5 episodes via scp
+- Train, then transfer checkpoint back to Pi for inference
+
+### 4. ACT inference node
+A ROS 2 node (`scripts/act_policy.py`) that:
+- Loads a trained ACT checkpoint
+- Subscribes to `/aurora/rgb/crosshair` + `/aurora/depth/image_raw` + `/teleop/ik_state`
+- Runs the policy at 12 Hz
+- Calls `kinematics.ik.solve(theta, pitch, radius, up_down, gripper_frac)` on each output
+- Sends servo commands directly (bypasses teleop)
+
+---
+
+## Critical path
+
+```
+Task definition → Record episodes → Transfer to GPU → Train → Transfer checkpoint → Inference node → Test
+```
+
+**Task definition is the current blocker.** The scene must be fully fixed before
+recording episode 1. All other items (recorder, inference node) can be built in parallel.
