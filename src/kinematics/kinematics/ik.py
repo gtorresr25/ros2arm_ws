@@ -69,6 +69,12 @@ L_TCP  = L3 + L_TOOL   # 0.170 m  joint4 → TCP
 _GRIPPER_OPEN   = 200
 _GRIPPER_CLOSED = 680
 
+# ── Floor guard ───────────────────────────────────────────────────────────────
+# Minimum TCP height above the table surface (z = 0 is the ground plane).
+# Keeps the gripper from driving into the table during telop and ACT inference.
+# Lower this value if your task requires picking objects flush with the surface.
+Z_TCP_MIN = 0.005   # 5 mm above table
+
 
 # ── Result type ───────────────────────────────────────────────────────────────
 @dataclass
@@ -169,6 +175,10 @@ def solve(
     # Camera forward = pitch direction; camera up = 90° CCW from forward.
     r_tcp = radius  * math.cos(pitch) - up_down * math.sin(pitch)
     z_tcp = D_BASE  + radius * math.sin(pitch) + up_down * math.cos(pitch)
+
+    # ── Floor guard ───────────────────────────────────────────────────────────
+    if z_tcp < Z_TCP_MIN:
+        return IKResult(joints={}, pulses={}, reachable=False)
 
     # ── Step 2: Joint4 (wrist pivot) position in arm plane ───────────────────
     # TCP = joint4 + L_tcp along the tool direction.
