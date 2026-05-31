@@ -45,7 +45,7 @@ from ros_robot_controller_sdk import Board
 
 # ── IK ────────────────────────────────────────────────────────────────────────
 from kinematics.ik import solve, D_BASE, L1, L2, L_TCP
-from kinematics.transform import _map, joint1_map, joint2_map, joint3_map, joint4_map
+from kinematics.transform import _map, joint1_map, joint2_map, joint3_map, joint4_map, joint5_map
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 SERIAL_PORT   = "/dev/ttyUSB0"
@@ -75,6 +75,33 @@ GRIP_CLICK_STEP = 0.1   # fraction change per click (0.0 = open, 1.0 = closed)
 
 # ── Home ──────────────────────────────────────────────────────────────────────
 HOME1_PULSES = {6: 504, 5: 603, 4: 824, 3: 111, 2: 498, 1: 230}
+
+def pulses_to_joint_angles(p: dict) -> list:
+    """p = {6: pulse, 5: pulse, ..., 1: pulse}
+    Returns [j1, j2, j3, j4, wrist, gripper_rad] float32."""
+    j1      =  math.radians(_map(p[6], joint1_map))
+    j2      = -math.radians(_map(p[5], joint2_map)) - math.pi / 2
+    j3      =  math.radians(_map(p[4], joint3_map))
+    j4      = -math.radians(_map(p[3], joint4_map)) - math.pi / 2
+    wrist   =  math.radians(_map(p[2], joint5_map))
+    gripper = (p[1] - 200) / (680 - 200) * 0.785   # 200=open→0 rad, 680=closed→0.785 rad
+    return [j1, j2, j3, j4, wrist, gripper]
+
+
+def read_servo_pulses(board) -> dict:
+    """Read back actual pulse positions from all 6 servos.
+    Returns {6: pulse, 5: pulse, …, 1: pulse} or {} on failure."""
+    pulses = {}
+    try:
+        for sid in (6, 5, 4, 3, 2, 1):
+            result = board.bus_servo_read_position(sid)
+            if result is None:
+                return {}
+            pulses[sid] = result[-1]   # <BBbh → last field is int16 pulse
+    except Exception:
+        return {}
+    return pulses
+
 
 def _lpf(des, smo):
     """First-order low-pass (exponential smoothing)."""
@@ -107,8 +134,9 @@ def pulses_to_state(p):
 class JointPublisher(Node):
     def __init__(self):
         super().__init__('teleop_ik_v2')
-        self.pub    = self.create_publisher(JointState, '/joint_states', 10)
-        self.ik_pub = self.create_publisher(Float32MultiArray, '/teleop/ik_state', 10)
+        self.pub     = self.create_publisher(JointState, '/joint_states', 10)
+        self.ik_pub  = self.create_publisher(Float32MultiArray, '/teleop/ik_state', 10)
+        self.ja_pub  = self.create_publisher(Float32MultiArray, '/teleop/joint_angles', 10)
         self.rec_pub = self.create_publisher(Bool, '/teleop/recording', 10)
 
     def publish(self, joints: dict):
@@ -124,6 +152,12 @@ class JointPublisher(Node):
         msg.data = [float(theta), float(pitch), float(radius),
                     float(up_down), float(gripper_frac), float(tilt)]
         self.ik_pub.publish(msg)
+
+    def publish_joint_angles(self, angles: list):
+        """Publish actual servo joint angles [j1,j2,j3,j4,wrist,gripper_rad]."""
+        msg = Float32MultiArray()
+        msg.data = [float(a) for a in angles]
+        self.ja_pub.publish(msg)
 
     def publish_recording(self, recording: bool):
         msg = Bool()
@@ -345,9 +379,15 @@ def main():
                     board.bus_servo_set_position(
                         MOVE_DURATION,
                         [[6, p[6]], [5, p[5]], [4, p[4]], [3, p[3]], [2, p[2]], [1, p[1]]])
+
+                    # Read back actual positions; fall back to commanded pulses on failure
+                    readback = read_servo_pulses(board)
+                    joint_angles = pulses_to_joint_angles(readback if readback else p)
+
                     ros_node.publish(result.joints)
                     ros_node.publish_ik_state(smo_theta, smo_pitch, smo_radius,
                                               smo_up_down, gripper_frac_state[0], smo_tilt)
+                    ros_node.publish_joint_angles(joint_angles)
                     ros_node.publish_recording(recording)
                     sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt = (
                         smo_theta, smo_pitch, smo_radius, smo_up_down, smo_tilt)

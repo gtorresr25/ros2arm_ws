@@ -15,22 +15,22 @@ Output: data/hdf5/episode_N.hdf5
 Only frames where /teleop/recording == True are included.
 RGB is converted BGR→RGB.
 
-State / action space — 6 dimensions:
-  [theta, pitch, radius, up_down, gripper_frac, tilt]
+State / action space — 12 dimensions:
+  qpos[:, 0:6]  — IK state        [theta, pitch, radius, up_down, gripper_frac, tilt]
+  qpos[:, 6:12] — Joint angles    [j1, j2, j3, j4, wrist, gripper_rad]
 
-qpos   — absolute IK state at each timestep
-action — relative delta: action[t] = qpos[t+1] - qpos[t], action[-1] = 0
+action — relative IK delta (6D only): action[t] = ik_state[t+1] - ik_state[t], action[-1] = 0
 
 Normalization uses fixed physical bounds (not data-driven stats):
-  qpos_norm   = (qpos - lo) / (hi - lo) * 2 - 1       → [-1, 1]
-  action_norm = action / ((hi - lo) / 2)               → same scale
+  qpos_norm   = (qpos - lo) / (hi - lo) * 2 - 1       → [-1, 1]  (all 12 dims)
+  action_norm = action / ((hi - lo) / 2)               → same scale (first 6 dims only)
 
 HDF5 layout (ACT format):
   /observations/images/top    (T, H, W, 3)  uint8   RGB with crosshair
-  /observations/qpos          (T, 6)         float32 normalized absolute state
-  /observations/qpos_raw      (T, 6)         float32 raw absolute state
-  /action                     (T, 6)         float32 normalized relative delta
-  /action_raw                 (T, 6)         float32 raw relative delta
+  /observations/qpos          (T, 12)        float32 normalized [IK_state(6) | joint_angles(6)]
+  /observations/qpos_raw      (T, 12)        float32 raw
+  /action                     (T, 6)         float32 normalized relative IK delta
+  /action_raw                 (T, 6)         float32 raw relative IK delta
   attrs: episode_len, hz
 """
 
@@ -53,46 +53,58 @@ HDF5_DIR  = os.path.join(_HERE, '..', 'data', 'hdf5')
 # ── Topics ────────────────────────────────────────────────────────────────────
 TOPIC_RGB       = '/aurora/rgb/crosshair'
 TOPIC_IK        = '/teleop/ik_state'
+TOPIC_JA        = '/teleop/joint_angles'
 TOPIC_RECORDING = '/teleop/recording'
 
-ALL_TOPICS = {TOPIC_RGB, TOPIC_IK, TOPIC_RECORDING}
+ALL_TOPICS = {TOPIC_RGB, TOPIC_IK, TOPIC_JA, TOPIC_RECORDING}
 
-# ── Physical bounds for each IK dimension ─────────────────────────────────────
-# Used for fixed-range normalization — stable across datasets.
-# Columns: [lo, hi] for [theta, pitch, radius, up_down, gripper_frac, tilt]
+# ── Physical bounds — 12 dimensions ───────────────────────────────────────────
+# Columns: [lo, hi]
+# dims 0:6  = IK state   [theta, pitch, radius, up_down, gripper_frac, tilt]
+# dims 6:12 = joint angles [j1, j2, j3, j4, wrist, gripper_rad]  (from URDF limits)
 NORM_BOUNDS = np.array([
+    # IK state (6)
     [-math.radians(110),  math.radians(110)],   # theta        (rad)
     [-math.pi / 2,        math.pi / 4      ],   # pitch        (rad)
     [ 0.00,               0.35             ],   # radius       (m)
     [-0.15,               0.15             ],   # up_down      (m)
     [ 0.0,                1.0              ],   # gripper_frac (fraction)
     [-math.radians(120),  math.radians(120)],   # tilt         (rad)
+    # Joint angles (6) — from servo pulse maps in transform.py
+    [-math.radians(120),  math.radians(120)],   # j1  base yaw    joint1_map  ±120°
+    [-math.pi / 2,        math.pi / 2      ],   # j2  shoulder    joint2_map  servo [-180,0]° → j2 ±90°
+    [-math.radians(120),  math.radians(120)],   # j3  elbow       joint3_map  ±120°
+    [-math.radians(120),  math.radians(120)],   # j4  wrist pitch joint4_map  servo [-200,20]° → j4 ≈ ±110° (use 120° for safety)
+    [-math.radians(120),  math.radians(120)],   # wrist roll      joint5_map  ±120°
+    [ 0.0,                0.785            ],   # gripper_rad     0=open, 0.785=closed
 ], dtype=np.float32)
 
-_LO        = NORM_BOUNDS[:, 0]
-_HI        = NORM_BOUNDS[:, 1]
-_RANGE     = _HI - _LO           # full range per dimension
-_HALF_RANGE = _RANGE / 2.0       # used to scale action deltas
+_LO   = NORM_BOUNDS[:, 0]      # (12,)
+_HI   = NORM_BOUNDS[:, 1]      # (12,)
+_RANGE      = _HI - _LO        # (12,) full range
+# Action normalization uses only IK dims (first 6)
+_HALF_RANGE_IK = (_HI[:6] - _LO[:6]) / 2.0
 
 
 # ── Normalization ─────────────────────────────────────────────────────────────
 
 def normalize_qpos(qpos: np.ndarray) -> np.ndarray:
-    """Map absolute state from physical range to [-1, 1]."""
+    """Map 12D absolute state from physical range to [-1, 1]."""
     return ((qpos - _LO) / _RANGE * 2.0 - 1.0).astype(np.float32)
 
 
 def normalize_action(action: np.ndarray) -> np.ndarray:
-    """Scale relative deltas by half-range so units match normalized qpos."""
-    return (action / _HALF_RANGE).astype(np.float32)
+    """Scale 6D IK deltas by IK half-range so units match normalized qpos."""
+    return (action / _HALF_RANGE_IK).astype(np.float32)
 
 
 # ── Action computation ────────────────────────────────────────────────────────
 
 def qpos_to_action(qpos_arr: np.ndarray) -> np.ndarray:
-    """Relative delta: action[t] = qpos[t+1] - qpos[t], action[-1] = 0."""
-    action = np.zeros_like(qpos_arr)
-    action[:-1] = qpos_arr[1:] - qpos_arr[:-1]
+    """Relative IK delta (6D): action[t] = ik_state[t+1] - ik_state[t], action[-1] = 0."""
+    ik = qpos_arr[:, :6]
+    action = np.zeros((len(ik), 6), dtype=np.float32)
+    action[:-1] = ik[1:] - ik[:-1]
     return action
 
 
@@ -165,9 +177,20 @@ def decode_rgb(msg) -> np.ndarray:
 
 def write_hdf5(rgbs, qpos_raw, out_path: str) -> None:
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    action_raw  = qpos_to_action(qpos_raw)
-    qpos_norm   = normalize_qpos(qpos_raw)
-    action_norm = normalize_action(action_raw)
+    T = len(rgbs)
+
+    action_raw_6d  = qpos_to_action(qpos_raw)       # (T, 6) IK deltas
+    action_norm_6d = normalize_action(action_raw_6d) # (T, 6) normalized
+
+    # Pad to 12D to match state_dim — dims 6:12 are zeros (joint angles are
+    # observation-only; the policy only acts in IK space)
+    action_raw  = np.zeros((T, 12), dtype=np.float32)
+    action_norm = np.zeros((T, 12), dtype=np.float32)
+    action_raw[:, :6]  = action_raw_6d
+    action_norm[:, :6] = action_norm_6d
+
+    qpos_norm = normalize_qpos(qpos_raw)
+
     with h5py.File(out_path, 'w') as f:
         obs = f.create_group('observations')
         img = obs.create_group('images')
@@ -205,10 +228,13 @@ def convert_bag(bag_dir: str, hdf5_dir: str, out_idx: int) -> int:
             if not (seg_start <= ts <= seg_end):
                 continue
             ik_msg = nearest_msg(messages[TOPIC_IK], ts)
-            if ik_msg is None:
+            ja_msg = nearest_msg(messages[TOPIC_JA], ts)
+            if ik_msg is None or ja_msg is None:
                 continue
+            ik_state    = np.array(ik_msg.data, dtype=np.float32)   # (6,)
+            joint_angles = np.array(ja_msg.data, dtype=np.float32)  # (6,)
             rgbs.append(decode_rgb(rgb_msg))
-            qposs.append(np.array(ik_msg.data, dtype=np.float32))
+            qposs.append(np.concatenate([ik_state, joint_angles]))   # (12,)
 
         T = len(rgbs)
         if T == 0:
@@ -244,8 +270,11 @@ def main():
         )
 
     print(f"Bags found: {len(episode_dirs)}")
-    print(f"\nNorm bounds:")
-    names = ['theta', 'pitch', 'radius', 'up_down', 'gripper_frac', 'tilt']
+    names = [
+        'theta', 'pitch', 'radius', 'up_down', 'gripper_frac', 'tilt',
+        'j1', 'j2', 'j3', 'j4', 'wrist', 'gripper_rad',
+    ]
+    print(f"\nNorm bounds (12D):")
     for i, name in enumerate(names):
         print(f"  {name:14s}  [{_LO[i]:+.4f}, {_HI[i]:+.4f}]")
 
@@ -261,7 +290,7 @@ def main():
     # Save bounds alongside HDF5 files for use at inference
     os.makedirs(hdf5_dir, exist_ok=True)
     bounds_path = os.path.join(hdf5_dir, 'norm_bounds.npz')
-    np.savez(bounds_path, lo=_LO, hi=_HI, names=names)
+    np.savez(bounds_path, lo=_LO, hi=_HI, names=np.array(names))
     print(f"\nDone. {out_idx} episode(s) written to {hdf5_dir}/")
     print(f"Norm bounds saved to {bounds_path}")
 

@@ -120,9 +120,14 @@ def get_norm_stats(dataset_dir, num_episodes):
     }
 
 
-def load_data(task_name, batch_size_train, batch_size_val):
-    """Load train/val dataloaders for a given task."""
-    cfg             = get_task_config(task_name)
+def load_data(task_name, batch_size_train, batch_size_val, data_dir=None):
+    """Load train/val dataloaders for a given task.
+
+    data_dir: optional path override for the HDF5 episode folder.
+              Useful when training locally where the dataset is not at
+              the default ~/act/data/pick_place location.
+    """
+    cfg             = get_task_config(task_name, data_dir=data_dir)
     dataset_dir     = cfg['dataset_dir']
     num_episodes    = cfg['num_episodes']
     camera_names    = cfg['camera_names']

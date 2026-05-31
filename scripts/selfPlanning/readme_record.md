@@ -28,6 +28,7 @@ EPISODE=$(ls -d data/pick_place/episode_* 2>/dev/null | wc -l)
 ros2 bag record \
   /aurora/rgb/crosshair \
   /teleop/ik_state \
+  /teleop/joint_angles \
   /teleop/recording \
   -o data/pick_place/episode_$EPISODE
 ```

@@ -219,7 +219,7 @@ def main(args):
         data_dir = os.path.expanduser(data_dir)
 
     # ── Architecture ──────────────────────────────────────────────────────────
-    state_dim = 6        # [theta, pitch, radius, up_down, gripper_frac, tilt]
+    state_dim = 12       # IK state (6) + joint angles (6)
 
     policy_config = {
         'lr':              args['lr'],
