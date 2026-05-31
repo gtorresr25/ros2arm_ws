@@ -222,7 +222,7 @@ def solve(
         'joint3':       j3,
         'joint4':       j4,
         'wrist':        j5,
-        'gripper_joint': gripper * 0.785,
+        'gripper_joint': (1.0 - gripper) * 0.785,
     }
 
     pulses = _joint_angles_to_pulses(j1, j2, j3, j4, j5, gripper)

@@ -5,3 +5,12 @@ log/
 __pycache__/
 *.pyc
 *.egg-info/
+
+# Large datasets and checkpoints — do not commit
+data/
+checkpoints/
+act_pi_transfer/checkpoints/
+*.zip
+
+# IDE
+.vscode/

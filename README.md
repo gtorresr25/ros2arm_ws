@@ -249,8 +249,9 @@ python3 scripts/floor_filter.py
 
 **Status: complete and tested on hardware.**
 
-`teleop_ik_v2.py` — mouse-driven teleop with stall-detected gripper, RViz visualization,
-and live RGB + depth camera feed. Requires a one-time build if packages have changed.
+`teleop_ik_v2.py` — mouse + keyboard teleop with RViz visualization and live RGB camera feed.
+All 6 IK DOF are controllable: base yaw, pitch, reach, height, wrist roll, and gripper.
+Requires a one-time build if packages have changed.
 
 ### Build
 ```bash
@@ -261,7 +262,7 @@ source install/setup.bash
 
 ### Run
 ```bash
-# Terminal 1 — camera driver + RViz (robot model, RGB feed, depth feed)
+# Terminal 1 — camera driver + RViz (robot model + RGB feed)
 ros2 launch armpi_ultra_description teleop_rviz.launch.py
 
 # Terminal 2 — teleop
@@ -276,13 +277,91 @@ python3 scripts/teleop_ik_v2.py
 | Mouse up / down | Vertical position (`up_down`) |
 | Scroll up / down | Reach in / out (`radius`) |
 | `Q` / `E` | Pitch tilt up / down |
-| Left click | Grip (stall-detected) |
-| Right click | Release gripper |
+| `A` / `D` | Wrist roll left / right (`tilt`) |
+| Left click | Close gripper one step (+10%) |
+| Right click | Open gripper one step (−10%) |
+| `I` / `O` | Start / stop episode recording |
 | `H` | Return to home1 |
-| `0` | Mouse off (disables all mouse input + gripper) |
+| `0` | Mouse off (disables all mouse input) |
 | `1`–`9` | Sensitivity multiplier |
-| `P` | Print current state |
 | `Esc` / `Ctrl-C` | Quit |
+
+### IK state published on `/teleop/ik_state`
+`Float32MultiArray` with 6 fields: `[theta, pitch, radius, up_down, gripper_frac, tilt]`
+All values are smoothed absolute positions (exponential moving average, α=0.4, 12 Hz).
+
+---
+
+## ACT Demo Recording
+
+Record pick-and-place demonstrations for ACT imitation learning.
+Requires the teleop session to be running (Terminals 1 and 2 above).
+
+Use `I` to start recording and `O` to stop — the `/teleop/recording` flag
+gates which frames are saved to HDF5. The bag records continuously; only
+the flagged window is extracted at conversion time.
+
+### Record an episode
+```bash
+# Terminal 3 — start bag recording (Ctrl+C to stop and save)
+cd ~/ros2arm_ws && source install/setup.bash
+ros2 bag record /aurora/rgb/crosshair /teleop/ik_state /teleop/recording \
+    -o data/pick_place/episode_0
+```
+
+Increment the episode number for each new demo:
+```bash
+ros2 bag record /aurora/rgb/crosshair /teleop/ik_state /teleop/recording \
+    -o data/pick_place/episode_1
+```
+
+### Convert bags to HDF5
+```bash
+python3 scripts/bag_to_hdf5.py           # convert all episodes
+python3 scripts/bag_to_hdf5.py --episode 1   # convert one episode
+```
+
+Output files:
+```
+data/hdf5/episode_0.hdf5
+data/hdf5/episode_1.hdf5
+...
+data/hdf5/norm_stats.npz    ← per-dimension z-score stats for training
+```
+
+### HDF5 layout
+| Dataset | Shape | dtype | Content |
+|---|---|---|---|
+| `/observations/images/top` | (T, H, W, 3) | uint8 | RGB with crosshair |
+| `/observations/qpos` | (T, 6) | float32 | Normalized absolute state |
+| `/observations/qpos_raw` | (T, 6) | float32 | Raw absolute state |
+| `/action` | (T, 6) | float32 | Normalized relative delta |
+| `/action_raw` | (T, 6) | float32 | Raw relative delta |
+
+State / action dimensions: `[theta, pitch, radius, up_down, gripper_frac, tilt]`
+
+`action[t] = qpos[t+1] - qpos[t]` — relative movement, not absolute target.
+`action[-1] = 0` (last frame has no successor).
+Both `qpos` and `action` are normalized using fixed physical bounds (not data-driven stats):
+- `qpos_norm   = (qpos - lo) / (hi - lo) * 2 - 1`  → [-1, 1]
+- `action_norm = action / ((hi - lo) / 2)`           → same scale
+
+| Dimension | lo | hi |
+|---|---|---|
+| `theta` | −110° | +110° |
+| `pitch` | −90° | +45° |
+| `radius` | 0.00 m | 0.35 m |
+| `up_down` | −0.15 m | +0.15 m |
+| `gripper_frac` | 0.0 | 1.0 |
+| `tilt` | −120° | +120° |
+
+Raw values are preserved alongside. Bounds saved to `norm_bounds.npz` for inference.
+
+### Verify a recording
+```bash
+ros2 bag info data/pick_place/episode_0
+ros2 bag play data/pick_place/episode_0   # replay in RViz
+```
 
 ---
 

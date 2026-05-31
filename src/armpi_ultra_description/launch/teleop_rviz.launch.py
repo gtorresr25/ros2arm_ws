@@ -1,11 +1,14 @@
 """
 teleop_rviz.launch.py
 
-Launches camera driver + robot_state_publisher + RViz.
-Use this alongside teleop_ik_v2.py, which publishes /joint_states itself.
+Launches camera driver + crosshair overlay + robot_state_publisher + RViz.
+Run teleop_ik_v2.py separately — it owns the terminal for raw mouse/keyboard input.
 
   Terminal 1:  ros2 launch armpi_ultra_description teleop_rviz.launch.py
-  Terminal 2:  python3 scripts/teleop_ik_v2.py
+  Terminal 2:  cd ~/ros2arm_ws && source install/setup.bash
+               python3 scripts/teleop_ik_v2.py
+  Terminal 3:  ros2 bag record /aurora/rgb/crosshair /teleop/ik_state /teleop/recording \\
+                   -o data/pick_place/episode_N
 
 Optional argument:
   rviz_config:=arm_3dviz.rviz   (default: arm_3dviz.rviz)
@@ -35,13 +38,11 @@ def generate_launch_description():
             namespace='aurora',
             parameters=[{
                 'rgb_enable':        True,
-                'depth_enable':      True,
+                'depth_enable':      False,
                 'ir_enable':         False,
                 'point_cloud_enable': False,
                 'rgb_fps':           12,
                 'ir_fps':            12,
-                'align_mode':        True,
-                'depth_correction':  True,
             }],
             output='screen',
         ),

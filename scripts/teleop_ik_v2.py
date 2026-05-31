@@ -8,16 +8,17 @@ Mouse controls
   Move up / down      up_down   vertical position
   Scroll up           radius    retract (inward)
   Scroll down         radius    extend (outward)
-  Left click          grip (stall-detected, runs in background)
-  Right click         release gripper
+  Left click          close gripper a step
+  Right click         open gripper a step
 
 Keyboard controls
 -----------------
   Q / E    pitch       tilt up / tilt down
+  A / D    tilt        wrist roll left / right
+  I / O    recording   start / stop episode recording
   H        home1
   0        mouse off (re-enable with 1–9)
   1 – 9    sensitivity multiplier
-  P        print current state
   Esc / Ctrl-C   quit
 
 Requires:
@@ -37,18 +38,14 @@ import threading
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Bool
 
 # ── SDK ───────────────────────────────────────────────────────────────────────
-SDK_PATH = ("/home/andres/ros2arm_ws/ArmPi_Ultra_Resources"
-            "/Source Code/ROS2/src/driver/ros_robot_controller"
-            "/ros_robot_controller")
-sys.path.insert(0, SDK_PATH)
 from ros_robot_controller_sdk import Board
 
 # ── IK ────────────────────────────────────────────────────────────────────────
-sys.path.insert(0, "/home/andres/ros2arm_ws/install/kinematics/lib/python3/dist-packages")
 from kinematics.ik import solve, D_BASE, L1, L2, L_TCP
+from kinematics.transform import _map, joint1_map, joint2_map, joint3_map, joint4_map
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 SERIAL_PORT   = "/dev/ttyUSB0"
@@ -60,7 +57,7 @@ CMD_HZ       = 12
 CMD_INTERVAL = 1.0 / CMD_HZ    # ~83 ms
 
 # ── Smoothing ─────────────────────────────────────────────────────────────────
-ALPHA = 0.4     # 1.0 = instant, 0.1 = very smooth/laggy
+ALPHA = 0.2     # 1.0 = instant, 0.1 = very smooth/laggy
 
 # ── Motion sensitivity ────────────────────────────────────────────────────────
 SENS_BASE = {
@@ -68,58 +65,26 @@ SENS_BASE = {
     'up_down': 0.0010,
     'radius':  0.004,
     'pitch':   math.radians(3),
+    'tilt':    math.radians(3),
 }
 THETA_LIMIT = math.radians(110)
+TILT_LIMIT  = math.radians(120)
 
 # ── Gripper ───────────────────────────────────────────────────────────────────
-GRIP_OPEN     = 200     # fully open pulse
-GRIP_MAX      = 610     # max safe closing pulse
-GRIP_STEP     = 10      # pulse increment per step
-GRIP_STALL_TH = 40      # (commanded − actual) threshold → contact detected
-GRIP_STEP_DT  = 0.05    # seconds between steps
-
-def grip_until_stall(board, lock, stop_flag):
-    """
-    Open gripper then close incrementally until stall (contact) or max pulse.
-    Runs in a background thread. lock serializes serial port with arm commands.
-    stop_flag: threading.Event — set it to abort mid-grip (e.g. on release).
-    """
-    with lock:
-        board.bus_servo_set_position(0.6, [[1, GRIP_OPEN]])
-    time.sleep(0.7)
-
-    pulse = GRIP_OPEN
-    while pulse < GRIP_MAX and not stop_flag.is_set():
-        pulse = min(pulse + GRIP_STEP, GRIP_MAX)
-        with lock:
-            board.bus_servo_set_position(0.05, [[1, pulse]])
-        time.sleep(GRIP_STEP_DT)
-        with lock:
-            raw = board.bus_servo_read_position(1)
-        actual = raw[0] if isinstance(raw, (list, tuple)) and raw else raw
-        if actual is not None and (pulse - actual) >= GRIP_STALL_TH:
-            break   # contact — stop here
-
-def grip_release(board, lock):
-    with lock:
-        board.bus_servo_set_position(0.5, [[1, GRIP_OPEN]])
+GRIP_CLICK_STEP = 0.1   # fraction change per click (0.0 = open, 1.0 = closed)
 
 # ── Home ──────────────────────────────────────────────────────────────────────
 HOME1_PULSES = {6: 504, 5: 603, 4: 824, 3: 111, 2: 498, 1: 230}
 
-_J1_MAP = [0, 1000, 500, -120,  120,   0]
-_J2_MAP = [0, 1000, 500,   30, -210, -90]
-_J3_MAP = [0, 1000, 500, -120,  120,   0]
-_J4_MAP = [0, 1000, 500,   30, -210, -90]
-
-def _fwd(v, m):
-    return ((v - m[2]) / (m[1] - m[0])) * (m[4] - m[3]) + m[5]
+def _lpf(des, smo):
+    """First-order low-pass (exponential smoothing)."""
+    return ALPHA * des + (1 - ALPHA) * smo
 
 def pulses_to_state(p):
-    theta = math.radians(_fwd(p[6], _J1_MAP))
-    j2    = -math.radians(_fwd(p[5], _J2_MAP)) - math.pi / 2
-    j3    =  math.radians(_fwd(p[4], _J3_MAP))
-    j4    = -math.radians(_fwd(p[3], _J4_MAP)) - math.pi / 2
+    theta = math.radians(_map(p[6], joint1_map))
+    j2    = -math.radians(_map(p[5], joint2_map)) - math.pi / 2
+    j3    =  math.radians(_map(p[4], joint3_map))
+    j4    = -math.radians(_map(p[3], joint4_map)) - math.pi / 2
 
     q2_std = j2 + math.pi / 2
     q3_std = -j3
@@ -144,6 +109,7 @@ class JointPublisher(Node):
         super().__init__('teleop_ik_v2')
         self.pub    = self.create_publisher(JointState, '/joint_states', 10)
         self.ik_pub = self.create_publisher(Float32MultiArray, '/teleop/ik_state', 10)
+        self.rec_pub = self.create_publisher(Bool, '/teleop/recording', 10)
 
     def publish(self, joints: dict):
         msg = JointState()
@@ -152,12 +118,17 @@ class JointPublisher(Node):
         msg.position = list(joints.values())
         self.pub.publish(msg)
 
-    def publish_ik_state(self, theta, pitch, radius, up_down, gripper_frac):
-        # Field order: [theta, pitch, radius, up_down, gripper_frac]
+    def publish_ik_state(self, theta, pitch, radius, up_down, gripper_frac, tilt=0.0):
+        # Field order: [theta, pitch, radius, up_down, gripper_frac, tilt]
         msg = Float32MultiArray()
         msg.data = [float(theta), float(pitch), float(radius),
-                    float(up_down), float(gripper_frac)]
+                    float(up_down), float(gripper_frac), float(tilt)]
         self.ik_pub.publish(msg)
+
+    def publish_recording(self, recording: bool):
+        msg = Bool()
+        msg.data = recording
+        self.rec_pub.publish(msg)
 
 # ── Terminal mouse ────────────────────────────────────────────────────────────
 _MOUSE_ON  = '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
@@ -204,7 +175,7 @@ def read_event(fd, esc_timeout=0.05):
     return ('key', '\x1b[' + buf)
 
 # ── Display ───────────────────────────────────────────────────────────────────
-def fmt_state(theta, pitch, radius, up_down, sens, reachable, note=''):
+def fmt_state(theta, pitch, radius, up_down, tilt, sens, reachable, note=''):
     tag      = 'OK' if reachable else '!!'
     sens_str = 'MOUSE OFF' if sens == 0 else f'sens×{sens}'
     line = (f"[{tag}]  "
@@ -212,6 +183,7 @@ def fmt_state(theta, pitch, radius, up_down, sens, reachable, note=''):
             f"pitch={math.degrees(pitch):+6.1f}°  "
             f"r={radius*100:5.1f}cm  "
             f"up={up_down*100:+5.1f}cm  "
+            f"roll={math.degrees(tilt):+6.1f}°  "
             f"{sens_str}")
     return line + (f"  {note}" if note else '')
 
@@ -236,31 +208,29 @@ def main():
     time.sleep(4.5)
 
     theta, pitch, radius, up_down = pulses_to_state(HOME1_PULSES)
-    gripper_frac = 0.0
-    sens         = 1
-    reachable    = True
+    gripper_frac_state = [0.0]   # shared with grip thread — index 0 is live frac
+    recording          = False
+    sens               = 1
+    reachable          = True
 
-    ros_node.publish(solve(theta, pitch, radius, up_down, gripper=gripper_frac).joints)
+    ros_node.publish(solve(theta, pitch, radius, up_down, gripper=0.0).joints)
 
     print("\nReady.")
     print("  Mouse move    → pan left/right (θ) and up/down")
     print("  Scroll        → radius in / out")
     print("  Left click    → grip     Right click → release")
     print("  Q / E         → pitch up / down")
+    print("  A / D         → wrist roll left / right")
+    print("  I → start recording     O → stop recording")
     print("  H → home1     0 → mouse off     1–9 → sensitivity     Esc → quit\n")
-    print(fmt_state(theta, pitch, radius, up_down, sens, reachable))
+    print(fmt_state(theta, pitch, radius, up_down, 0.0, sens, reachable))
 
     fd  = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
 
-    des_theta,  des_pitch,  des_radius,  des_up_down  = theta, pitch, radius, up_down
-    smo_theta,  smo_pitch,  smo_radius,  smo_up_down  = theta, pitch, radius, up_down
-    sent_theta, sent_pitch, sent_radius, sent_up_down = theta, pitch, radius, up_down
-
-    # Serial port lock — shared between arm command loop and grip thread
-    board_lock  = threading.Lock()
-    grip_thread = None
-    grip_stop   = threading.Event()
+    des_theta,  des_pitch,  des_radius,  des_up_down,  des_tilt  = theta, pitch, radius, up_down, 0.0
+    smo_theta,  smo_pitch,  smo_radius,  smo_up_down,  smo_tilt  = theta, pitch, radius, up_down, 0.0
+    sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt = theta, pitch, radius, up_down, 0.0
 
     last_cmd_t = time.monotonic()
     last_mouse = None
@@ -292,16 +262,16 @@ def main():
 
                         elif key.lower() == 'h':
                             _mouse_off()
-                            with board_lock:
-                                board.bus_servo_set_position(
-                                    2.0, [[sid, p] for sid, p in HOME1_PULSES.items()])
+                            board.bus_servo_set_position(
+                                2.0, [[sid, p] for sid, p in HOME1_PULSES.items()
+                                      if sid != 1])
                             time.sleep(2.5)
                             t0, p0, r0, u0 = pulses_to_state(HOME1_PULSES)
-                            des_theta,  des_pitch,  des_radius,  des_up_down  = t0, p0, r0, u0
-                            smo_theta,  smo_pitch,  smo_radius,  smo_up_down  = t0, p0, r0, u0
-                            sent_theta, sent_pitch, sent_radius, sent_up_down = t0, p0, r0, u0
-                            gripper_frac = 0.0
-                            ros_node.publish(solve(t0, p0, r0, u0, gripper=gripper_frac).joints)
+                            des_theta,  des_pitch,  des_radius,  des_up_down,  des_tilt  = t0, p0, r0, u0, 0.0
+                            smo_theta,  smo_pitch,  smo_radius,  smo_up_down,  smo_tilt  = t0, p0, r0, u0, 0.0
+                            sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt = t0, p0, r0, u0, 0.0
+                            ros_node.publish(solve(t0, p0, r0, u0,
+                                                   gripper=gripper_frac_state[0]).joints)
                             last_mouse = None
                             last_cmd_t = time.monotonic()
                             reachable  = True
@@ -313,6 +283,20 @@ def main():
 
                         elif key.lower() == 'e':
                             des_pitch -= sens * SENS_BASE['pitch']
+
+                        elif key.lower() == 'a':
+                            des_tilt = max(-TILT_LIMIT, des_tilt - sens * SENS_BASE['tilt'])
+
+                        elif key.lower() == 'd':
+                            des_tilt = min(TILT_LIMIT, des_tilt + sens * SENS_BASE['tilt'])
+
+                        elif key.lower() == 'i':
+                            recording = True
+                            note = '[REC]'
+
+                        elif key.lower() == 'o':
+                            recording = False
+                            note = '[STOP]'
 
                     elif etype == 'mouse':
                         btn, col, row, pressed = edata
@@ -332,20 +316,11 @@ def main():
                         elif btn == 65:                          # scroll down → extend
                             des_radius += sens * SENS_BASE['radius']
 
-                        elif btn == 0 and pressed and sens != 0:   # left click → grip
-                            if grip_thread is None or not grip_thread.is_alive():
-                                grip_stop.clear()
-                                grip_thread = threading.Thread(
-                                    target=grip_until_stall,
-                                    args=(board, board_lock, grip_stop),
-                                    daemon=True)
-                                grip_thread.start()
-                                note = '[gripping]'
+                        elif btn == 0 and pressed and sens != 0:   # left click → close
+                            gripper_frac_state[0] = min(1.0, gripper_frac_state[0] + GRIP_CLICK_STEP)
 
-                        elif btn == 2 and pressed and sens != 0:   # right click → release
-                            grip_stop.set()                     # abort grip if running
-                            grip_release(board, board_lock)
-                            note = '[released]'
+                        elif btn == 2 and pressed and sens != 0:   # right click → open
+                            gripper_frac_state[0] = max(0.0, gripper_frac_state[0] - GRIP_CLICK_STEP)
 
                     more, _, _ = select.select([fd], [], [], 0)
                     if not more:
@@ -355,48 +330,43 @@ def main():
             now = time.monotonic()
             if now - last_cmd_t >= CMD_INTERVAL:
 
-                smo_theta   = ALPHA * des_theta   + (1 - ALPHA) * smo_theta
-                smo_pitch   = ALPHA * des_pitch   + (1 - ALPHA) * smo_pitch
-                smo_radius  = ALPHA * des_radius  + (1 - ALPHA) * smo_radius
-                smo_up_down = ALPHA * des_up_down + (1 - ALPHA) * smo_up_down
+                smo_theta   = _lpf(des_theta,   smo_theta)
+                smo_pitch   = _lpf(des_pitch,   smo_pitch)
+                smo_radius  = _lpf(des_radius,  smo_radius)
+                smo_up_down = _lpf(des_up_down, smo_up_down)
+                smo_tilt    = _lpf(des_tilt,    smo_tilt)
 
                 result    = solve(smo_theta, smo_pitch, smo_radius, smo_up_down,
-                                  gripper=gripper_frac)
+                                  gripper_tilt=smo_tilt, gripper=gripper_frac_state[0])
                 reachable = result.reachable
 
                 if reachable:
                     p = result.pulses
-                    with board_lock:
-                        board.bus_servo_set_position(
-                            MOVE_DURATION,
-                            [[6, p[6]], [5, p[5]], [4, p[4]], [3, p[3]], [2, p[2]]])
+                    board.bus_servo_set_position(
+                        MOVE_DURATION,
+                        [[6, p[6]], [5, p[5]], [4, p[4]], [3, p[3]], [2, p[2]], [1, p[1]]])
                     ros_node.publish(result.joints)
                     ros_node.publish_ik_state(smo_theta, smo_pitch, smo_radius,
-                                              smo_up_down, gripper_frac)
-                    sent_theta, sent_pitch, sent_radius, sent_up_down = (
-                        smo_theta, smo_pitch, smo_radius, smo_up_down)
+                                              smo_up_down, gripper_frac_state[0], smo_tilt)
+                    ros_node.publish_recording(recording)
+                    sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt = (
+                        smo_theta, smo_pitch, smo_radius, smo_up_down, smo_tilt)
                     if note == '[home1]':
                         note = ''
                 else:
-                    des_theta,  des_pitch,  des_radius,  des_up_down  = (
-                        sent_theta, sent_pitch, sent_radius, sent_up_down)
-                    smo_theta,  smo_pitch,  smo_radius,  smo_up_down  = (
-                        sent_theta, sent_pitch, sent_radius, sent_up_down)
+                    des_theta,  des_pitch,  des_radius,  des_up_down,  des_tilt  = (
+                        sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt)
+                    smo_theta,  smo_pitch,  smo_radius,  smo_up_down,  smo_tilt  = (
+                        sent_theta, sent_pitch, sent_radius, sent_up_down, sent_tilt)
 
                 last_cmd_t = now
 
-                # Update grip note once thread finishes
-                if grip_thread is not None and not grip_thread.is_alive():
-                    if note == '[gripping]':
-                        note = '[gripped]'
-
-                print(f"\r{fmt_state(smo_theta, smo_pitch, smo_radius, smo_up_down, sens, reachable, note)}   ",
+                print(f"\r{fmt_state(smo_theta, smo_pitch, smo_radius, smo_up_down, smo_tilt, sens, reachable, note)}   ",
                       end='', flush=True)
 
     except KeyboardInterrupt:
         pass
     finally:
-        grip_stop.set()
         _mouse_off()
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
         print("\n[INFO] Quit.")
