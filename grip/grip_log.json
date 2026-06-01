@@ -29,5 +29,192 @@
     "grip_pulse": 467,
     "temp_c": 47,
     "notes": []
+  },
+  {
+    "timestamp": "2026-05-25T14:03:45",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 45.4,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 315,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:05:10",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 55.0,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 200,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:15:43",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 38.6,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 375,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:16:18",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 55.0,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 200,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:17:45",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 3.2,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "max_pulse",
+    "grip_pulse": 601,
+    "temp_c": 33,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: max_pulse"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:18:14",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 55.0,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 200,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T14:40:51",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 6.7,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 580,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T17:42:08",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 18.5,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "SECURE",
+    "stop_reason": "stall",
+    "grip_pulse": 509,
+    "temp_c": 39,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "unknown object gripped at jaw=18.5mm"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T17:43:23",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 55.0,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 200,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T17:44:52",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 21.8,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "SECURE",
+    "stop_reason": "stall",
+    "grip_pulse": 489,
+    "temp_c": 44,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "unknown object gripped at jaw=21.8mm"
+    ]
+  },
+  {
+    "timestamp": "2026-05-25T17:53:08",
+    "mode": "unknown",
+    "estimate_source": "unknown",
+    "estimated_width_mm": null,
+    "actual_jaw_mm": 36.7,
+    "contact_offset_mm": null,
+    "threshold": 30,
+    "outcome": "FAILED",
+    "stop_reason": "read_error",
+    "grip_pulse": 390,
+    "temp_c": null,
+    "notes": [
+      "unknown object \u2014 conservative mode",
+      "no contact \u2014 stop_reason: read_error"
+    ]
   }
 ]

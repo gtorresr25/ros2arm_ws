@@ -38,7 +38,7 @@ def generate_launch_description():
             namespace='aurora',
             parameters=[{
                 'rgb_enable':        True,
-                'depth_enable':      False,
+                'depth_enable':      True,
                 'ir_enable':         False,
                 'point_cloud_enable': False,
                 'rgb_fps':           12,
